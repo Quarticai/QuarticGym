@@ -1,10 +1,7 @@
-numpy
-pandas
-scipy
-fastodeint
-gym
-tqdm
+numpy>=1.21.0
+pandas>=1.2.4
+scipy>=1.6.2
+gym>=0.18.3
+tqdm>=4.59.0
 
-#base envs
-pensimpy
 
