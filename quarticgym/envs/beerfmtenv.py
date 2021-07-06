@@ -8,7 +8,8 @@ from gym import spaces, Env
 
 random.seed(0)
 MAX_LENGTH = 200
-BEER_init = [0, 2, 2, 130, 0, 0, 0, 0] # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
+INIT_SUGAR = 130
+BEER_init = [0, 2, 2, INIT_SUGAR, 0, 0, 0, 0] # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
 BEER_min = [0, 0, 0, 0, 0, 0, 0, 0]
 BEER_max = [15, 15, 15, 150, 150, 10, 10, MAX_LENGTH]
 TEMPERATURE_min = [9.0]
@@ -113,7 +114,7 @@ class BeerFMTEnvGym(Env):
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
         t = np.arange(0 + self.time, 1 + self.time, 0.01)
         X_A, X_L, X_D, S, EtOH, DY, EA, _ = self.prev_denormalized_observation
-        sol = odeint(beer_ode, (X_A, X_L, X_D, S, EtOH, DY, EA), t, args=([130, action[0] + 273.15],))
+        sol = odeint(beer_ode, (X_A, X_L, X_D, S, EtOH, DY, EA), t, args=([INIT_SUGAR, action[0] + 273.15],))
         self.res_forplot.append(sol[-1, :])
         self.time += 1
         X_A, X_L, X_D, S, EtOH, DY, EA = sol[-1, :]
