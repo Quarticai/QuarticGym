@@ -8,6 +8,7 @@ from .utils import *
 from gym import spaces, Env
 from pensimpy.peni_env_setup import PenSimEnv
 
+
 csv.field_size_limit(sys.maxsize)
 random.seed(0)
 MINUTES_PER_HOUR = 60
@@ -35,6 +36,7 @@ def get_observation_data_reformed(observation, t):
 class PenSimEnvGym(PenSimEnv, Env):
     def __init__(self, recipe_combo, dense_reward=True, observation_dim=9, action_dim=6, normalize=True, observation_relaxation=1.2, fast=True):
         """
+        Time is not in our observation_space. We make the env time unaware and MDP.
         :dense_reward : bool, if True we return reward for each step, if False we accumulate the reward and return the sum at the end of an episode
         :observation_dim : int the dimensionality of state
         :action_dim : int the dimensionality of action
