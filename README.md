@@ -18,7 +18,7 @@ pip install pensimpy
 ```
 
 ### BeerFMT
-BeerFMT simulates the Beer Formutation process.
+BeerFMT simulates the Beer Fermentation process.
 
 Examples
 ============
