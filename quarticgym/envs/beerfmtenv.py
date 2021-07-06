@@ -11,8 +11,8 @@ MAX_LENGTH = 200
 BEER_init = [0, 2, 2, 130, 0, 0, 0, 0] # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
 BEER_min = [0, 0, 0, 0, 0, 0, 0, 0]
 BEER_max = [15, 15, 15, 150, 150, 10, 10, MAX_LENGTH]
-TEMPRETURE_min = [9.0]
-TEMPRETURE_max = [16.0]
+TEMPERATURE_min = [9.0]
+TEMPERATURE_max = [16.0]
 BIOMASS_end_threshold = 0.5
 BIOMASS_end_change_threshold = 0.01
 SUGAR_end_threshold = 0.5
@@ -63,7 +63,7 @@ class BeerFMTEnvGym(Env):
     def __init__(self, dense_reward=True, normalize=True, observation_relaxation=1.0, action_dim=1, observation_dim=8):
         """
         Time is in our observation_space. We make the env time aware.
-        The only action/input is tempreture.
+        The only action/input is temperature.
         The observations are X_A, X_L, X_D, S, EtOH, DY, EA, time
         """
         self.dense_reward = dense_reward
@@ -75,10 +75,10 @@ class BeerFMTEnvGym(Env):
         self.normalize = normalize
         self.max_observations = np.array(BEER_max, dtype=np.float32)
         self.min_observations = np.array(BEER_min, dtype=np.float32)
-        self.max_actions = np.array(TEMPRETURE_max, dtype=np.float32)
-        self.min_actions = np.array(TEMPRETURE_min, dtype=np.float32)
+        self.max_actions = np.array(TEMPERATURE_max, dtype=np.float32)
+        self.min_actions = np.array(TEMPERATURE_min, dtype=np.float32)
         # ---- set by dataset or use predefined as you wish if applicable ----
-        self.res_forplot = [] # for ploting purposes
+        self.res_forplot = [] # for plotting purposes
 
     def reaction_finish_calculator(self, X_A, X_L, X_D, S, EtOH, DY, EA):
         # X_A+X_L+X_D < 0.5 means end
