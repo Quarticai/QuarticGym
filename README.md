@@ -1,8 +1,7 @@
 ![alt text](figures/logo_light.png "Logo Title Text 1")
 
-**Development Status:** As of 07/2021 PenSimPy is under active maintenance (expect bug fixes and updates). 
-Please follow, star, and fork to get the latest functions.
-# QuarticGym ![](https://img.shields.io/badge/python-3.8.0-orange) ![](https://img.shields.io/badge/c%2B%2B-11-blue)
+**Development Status:** As of 07/2021 this repo is under active maintenance. Please follow, star, and fork to get the latest functions.
+# QuarticGym ![](https://img.shields.io/badge/python-3.8.0-orange)
 
 The QuarticGym supplements several Process Control environments to the [Openai Gym](https://gym.openai.com/) family, which quenches the pain of performing Deep Reinforcement Learning algorithms on them. Furthermore, we provided [d4rl-like](https://github.com/rail-berkeley/d4rl.git) wrappers for accompanied datasets, make Offline RL on those environments even smoother.
 

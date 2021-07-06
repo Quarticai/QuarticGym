@@ -10,7 +10,9 @@ random.seed(0)
 MAX_LENGTH = 200
 BEER_init = [0, 2, 2, 130, 0, 0, 0, 0] # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
 BEER_min = [0, 0, 0, 0, 0, 0, 0, 0]
-BEER_max = [200, 200, 200, 200, 200, 200, 200, MAX_LENGTH] #TODO:
+BEER_max = [15, 15, 15, 150, 150, 10, 10, MAX_LENGTH]
+TEMPRETURE_min = [9.0]
+TEMPRETURE_max = [16.0]
 BIOMASS_end_threshold = 0.5
 BIOMASS_end_change_threshold = 0.01
 SUGAR_end_threshold = 0.5
@@ -73,12 +75,12 @@ class BeerFMTEnvGym(Env):
         self.normalize = normalize
         self.max_observations = np.array(BEER_max, dtype=np.float32)
         self.min_observations = np.array(BEER_min, dtype=np.float32)
-        self.max_actions = np.array([16.0], dtype=np.float32)
-        self.min_actions = np.array([9.0], dtype=np.float32)
+        self.max_actions = np.array(TEMPRETURE_max, dtype=np.float32)
+        self.min_actions = np.array(TEMPRETURE_min, dtype=np.float32)
         # ---- set by dataset or use predefined as you wish if applicable ----
         self.res_forplot = [] # for ploting purposes
 
-    def reaction_finish_cauculator(self, X_A, X_L, X_D, S, EtOH, DY, EA):
+    def reaction_finish_calculator(self, X_A, X_L, X_D, S, EtOH, DY, EA):
         # X_A+X_L+X_D < 0.5 means end
         # X_A+X_L+X_D -> 0 fast, S needs to go to zero, EtOH > 50, the more the better, reward 1:1:1
         # T range 9-16
@@ -118,7 +120,7 @@ class BeerFMTEnvGym(Env):
         observation = [X_A, X_L, X_D, S, EtOH, DY, EA, self.time]
         observation = np.array(observation, dtype=np.float32)
         self.prev_denormalized_observation = observation
-        finished = self.reaction_finish_cauculator(X_A, X_L, X_D, S, EtOH, DY, EA)
+        finished = self.reaction_finish_calculator(X_A, X_L, X_D, S, EtOH, DY, EA)
         done = (finished or self.time == MAX_LENGTH)
         if finished:
             reward = 200
