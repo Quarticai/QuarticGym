@@ -51,6 +51,7 @@ def normalize_spaces(space, max_space=None, min_space=None):
     if min_space is None:
         min_space = space.min(axis=0)
     gap = max_space - min_space
+    gap += 1e-8 # to avoid div by 0
     full_sum = max_space + min_space
     return (2 * space - full_sum) / gap, max_space, min_space
 
@@ -65,6 +66,7 @@ def denormalize_spaces(space_normalized, max_space=None, min_space=None):
     if min_space is None:
         min_space = space_normalized.min(axis=0)
     gap = max_space - min_space
+    gap += 1e-8 # to avoid div by 0
     full_sum = max_space + min_space
     return (space_normalized * gap + full_sum) / 2, max_space, min_space
 

@@ -1,5 +1,11 @@
 numpy>=1.21.0
 pandas>=1.2.4
-scipy>=1.6.2
+scipy>=1.6.1
 gym>=0.18.3
 tqdm>=4.59.0
+# atropine-model
+casadi>=3.5.4
+slycot>=0.4.0
+control>=0.9.0
+future>=0.18.2
+git+https://github.com/Mohan-Zhang-u/SIPPY.git
