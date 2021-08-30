@@ -104,8 +104,5 @@ INPUT_REFS = [
 ]
 OUTPUT_REF = 0
 
-# system indentification
-TRAIN_SIZE = 2 / 3
-
 # control system
-SIM_TIME = 400
+SIM_TIME = 600
