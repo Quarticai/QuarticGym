@@ -30,8 +30,22 @@ class AtropineEnvGym(Env):
         self.observation_include_z = observation_include_z # 30
         self.observation_include_x = observation_include_x # 1694
 
-        self.x0 = np.loadtxt(x0_loc)  # initial states [0,50]
-        self.z0 = np.loadtxt(z0_loc)  # initial algebraic states [0, 0.5]
+        if type(x0_loc) is str:
+            self.x0 = np.loadtxt(x0_loc)  # initial states [0,50]
+        elif type(x0_loc) is np.ndarray:
+            self.x0 = x0_loc
+        elif type(x0_loc) is list:
+            self.x0 = np.array(x0_loc)
+        else:
+            raise Exception("x0_loc must be a string, list or a numpy array")
+        if type(z0_loc) is str:
+            self.z0 = np.loadtxt(z0_loc)  # initial states [0,50]
+        elif type(z0_loc) is np.ndarray:
+            self.z0 = z0_loc
+        elif type(z0_loc) is list:
+            self.z0 = np.array(z0_loc)
+        else:
+            raise Exception("z0_loc must be a string, list or a numpy array")
         self.model_preconfig = np.load(model_loc, allow_pickle=True)  # model
 
         # for a fixed batch.
@@ -122,13 +136,17 @@ class AtropineEnvGym(Env):
         _, xnext, znext = self.plant.simulate(self.xk, self.zk, uk)
         efactor = self.plant.calculate_Efactor(znext)
         self.Y.append(efactor)
+        reward_on_steady = -abs(efactor - self.yss)
+        reward_on_absolute_efactor = -abs(efactor)
+        reward_on_efactor_diff = self.previous_efactor - efactor
+        previous_efactor = self.previous_efactor
         if self.reward_on_steady:
-            reward = -abs(efactor - self.yss)
+            reward = reward_on_steady
         else:
             if self.reward_on_absolute_efactor:
-                reward = -abs(efactor)
+                reward = reward_on_absolute_efactor
             else:
-                reward = self.previous_efactor - efactor
+                reward = reward_on_efactor_diff
             self.previous_efactor = efactor
         self.xk = xnext
         self.zk = znext
@@ -161,10 +179,10 @@ class AtropineEnvGym(Env):
         if self.normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.t += 1
-        return observation, reward, False, {}
+        return observation, reward, False, {"efactor": efactor, "previous_efactor": previous_efactor, "reward_on_steady": reward_on_steady, "reward_on_absolute_efactor": reward_on_absolute_efactor, "reward_on_efactor_diff": reward_on_efactor_diff}
         # state, reward, done, info in gym env term 
 
-    def plot(self):
+    def plot(self, show=False, efactor_fig_name=None, input_fig_name=None):
         target_efactor = [self.yss + self.yr] * self.num_sim
         target_inputs = [USS + self.ur] * self.num_sim
         U = np.array(self.U) * 1000  # scale the solution to micro Litres
@@ -179,6 +197,8 @@ class AtropineEnvGym(Env):
         plt.ylabel('E-Factor [A.U.]')
         plt.legend()
         plt.grid()
+        if efactor_fig_name is not None:
+            plt.savefig(efactor_fig_name)
         plt.tight_layout()
 
         # create figure (fig), and array of axes (ax)
@@ -208,4 +228,9 @@ class AtropineEnvGym(Env):
         axs[1, 1].legend()
         plt.tight_layout()
         plt.grid()
-        plt.show()
+        if input_fig_name is not None:
+            plt.savefig(input_fig_name)
+        if show:
+            plt.show()
+        else:
+            plt.close()
