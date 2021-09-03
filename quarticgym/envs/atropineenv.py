@@ -11,9 +11,9 @@ from .helpers.constants import USS, INPUT_REFS, OUTPUT_REF, SIM_TIME
 from .utils import *
 
 class AtropineEnvGym(Env):
-    def __init__(self, normalize=True, data_len: int=200, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
+    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
         self.normalize = normalize
-        self.data_len = data_len
+        self.max_steps = max_steps # how many steps can this env run. if self.max_steps == -1 then run forever.
         self.action_dim = 4
         self.uss_observable = uss_observable # we assume that we can see the steady state output during steps. If true, we plus the actions with USS during steps.
         self.reward_on_steady = reward_on_steady # whether reward base on Efactor (the small the better) or base on how close it is to the steady e-factor
@@ -120,6 +120,10 @@ class AtropineEnvGym(Env):
         return observation
 
     def step(self, action):
+        if self.max_steps == -1:
+            done = False
+        else:
+            done = (self.t >= self.max_steps - 1)
         action = np.array(action, dtype=np.float32)
         if self.normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
@@ -179,7 +183,7 @@ class AtropineEnvGym(Env):
         if self.normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.t += 1
-        return observation, reward, False, {"efactor": efactor, "previous_efactor": previous_efactor, "reward_on_steady": reward_on_steady, "reward_on_absolute_efactor": reward_on_absolute_efactor, "reward_on_efactor_diff": reward_on_efactor_diff}
+        return observation, reward, done, {"efactor": efactor, "previous_efactor": previous_efactor, "reward_on_steady": reward_on_steady, "reward_on_absolute_efactor": reward_on_absolute_efactor, "reward_on_efactor_diff": reward_on_efactor_diff}
         # state, reward, done, info in gym env term 
 
     def plot(self, show=False, efactor_fig_name=None, input_fig_name=None):
