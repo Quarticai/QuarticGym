@@ -11,14 +11,15 @@ from .helpers.constants import USS, INPUT_REFS, OUTPUT_REF, SIM_TIME
 from .utils import *
 
 class AtropineEnvGym(Env):
-    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
+    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, reward_on_actions_penalty=0.0, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
         self.normalize = normalize
         self.max_steps = max_steps # how many steps can this env run. if self.max_steps == -1 then run forever.
         self.action_dim = 4
         self.uss_observable = uss_observable # we assume that we can see the steady state output during steps. If true, we plus the actions with USS during steps.
         self.reward_on_steady = reward_on_steady # whether reward base on Efactor (the small the better) or base on how close it is to the steady e-factor
         self.reward_on_absolute_efactor = reward_on_absolute_efactor # whether reward base on absolute Efactor. (is a valid input only if reward_on_steady is False)
-        
+        self.reward_on_actions_penalty = reward_on_actions_penalty
+
         # now, select what to include during observations. by default we should have format like 
         # USS1, USS2, USS3, USS4, U1, U2, U3, U4, ESS, E, KF_X1, KF_X2, Z1, Z2, ..., Z30
         self.observation_include_t = observation_include_t # 1
@@ -151,7 +152,8 @@ class AtropineEnvGym(Env):
                 reward = reward_on_absolute_efactor
             else:
                 reward = reward_on_efactor_diff
-            self.previous_efactor = efactor
+        reward += np.linalg.norm(action*self.reward_on_actions_penalty, ord=2)
+        self.previous_efactor = efactor
         self.xk = xnext
         self.zk = znext
         observations = []
