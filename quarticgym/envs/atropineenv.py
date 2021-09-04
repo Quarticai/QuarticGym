@@ -11,7 +11,7 @@ from .helpers.constants import USS, INPUT_REFS, OUTPUT_REF, SIM_TIME
 from .utils import *
 
 class AtropineEnvGym(Env):
-    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, reward_on_actions_penalty=0.0, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
+    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, reward_on_actions_penalty=0.0, reward_on_reject_actions=True, relaxed_max_min_actions=False, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
         self.normalize = normalize
         self.max_steps = max_steps # how many steps can this env run. if self.max_steps == -1 then run forever.
         self.action_dim = 4
@@ -19,6 +19,8 @@ class AtropineEnvGym(Env):
         self.reward_on_steady = reward_on_steady # whether reward base on Efactor (the small the better) or base on how close it is to the steady e-factor
         self.reward_on_absolute_efactor = reward_on_absolute_efactor # whether reward base on absolute Efactor. (is a valid input only if reward_on_steady is False)
         self.reward_on_actions_penalty = reward_on_actions_penalty
+        self.reward_on_reject_actions = reward_on_reject_actions # when input actions are larger than max_actions, reject it and end the env immediately. 
+        self.relaxed_max_min_actions = relaxed_max_min_actions
 
         # now, select what to include during observations. by default we should have format like 
         # USS1, USS2, USS3, USS4, U1, U2, U3, U4, ESS, E, KF_X1, KF_X2, Z1, Z2, ..., Z30
@@ -79,8 +81,11 @@ class AtropineEnvGym(Env):
         except ValueError:
             raise Exception("observations must contain something! Need at least one array to concatenate")
         self.min_observations = np.zeros(self.observation_dim, dtype=np.float32)
-        self.max_actions = np.ones(4, dtype=np.float32) * 5
-        self.min_actions = np.zeros(4, dtype=np.float32)
+        self.max_actions = np.array([0.408, 0.125, 0.392, 0.214], dtype=np.float32) # from dataset
+        self.min_actions = np.array([0.4075, 0.105, 0.387, 0.208], dtype=np.float32) # from dataset
+        if self.relaxed_max_min_actions:
+            self.max_actions = np.array([0.5, 0.2, 0.5, 0.4], dtype=np.float32) # from dataset
+            self.min_actions = np.array([0.3, 0.0, 0.2, 0.1], dtype=np.float32) # from dataset
         self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
         self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
         self.plant = Plant(ND1, ND2, ND3, V1, V2, V3, V4, dt)
@@ -184,6 +189,10 @@ class AtropineEnvGym(Env):
             raise Exception("observations must contain something! Need at least one array to concatenate")
         if self.normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
+        if self.reward_on_reject_actions: 
+            if (action > self.max_actions).any() or (action < self.min_actions).any():
+                reward = -100000.0
+                done = True
         self.t += 1
         return observation, reward, done, {"efactor": efactor, "previous_efactor": previous_efactor, "reward_on_steady": reward_on_steady, "reward_on_absolute_efactor": reward_on_absolute_efactor, "reward_on_efactor_diff": reward_on_efactor_diff}
         # state, reward, done, info in gym env term 
