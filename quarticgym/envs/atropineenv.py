@@ -11,16 +11,19 @@ from .helpers.constants import USS, INPUT_REFS, OUTPUT_REF, SIM_TIME
 from .utils import *
 
 class AtropineEnvGym(Env):
-    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_observable=False, reward_on_steady=True, reward_on_absolute_efactor=False, reward_on_actions_penalty=0.0, reward_on_reject_actions=True, relaxed_max_min_actions=False, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
+    def __init__(self, normalize=True, max_steps: int=60, x0_loc='quarticgym/datasets/atropineenv/x0.txt', z0_loc='quarticgym/datasets/atropineenv/z0.txt', model_loc='quarticgym/datasets/atropineenv/model.npy', uss_subtracted=False, reward_on_ess_subtracted=False, reward_on_steady=True, reward_on_absolute_efactor=False, reward_on_actions_penalty=0.0, reward_on_reject_actions=True, relaxed_max_min_actions=False, observation_include_t=True, observation_include_action=False, observation_include_uss=True, observation_include_ess=True, observation_include_e=True, observation_include_kf=True, observation_include_z=True, observation_include_x=False):
         self.normalize = normalize
         self.max_steps = max_steps # how many steps can this env run. if self.max_steps == -1 then run forever.
         self.action_dim = 4
-        self.uss_observable = uss_observable # we assume that we can see the steady state output during steps. If true, we plus the actions with USS during steps.
+        self.uss_subtracted = uss_subtracted # we assume that we can see the steady state output during steps. If true, we plus the actions with USS during steps.
+        self.reward_on_ess_subtracted = reward_on_ess_subtracted
         self.reward_on_steady = reward_on_steady # whether reward base on Efactor (the small the better) or base on how close it is to the steady e-factor
         self.reward_on_absolute_efactor = reward_on_absolute_efactor # whether reward base on absolute Efactor. (is a valid input only if reward_on_steady is False)
         self.reward_on_actions_penalty = reward_on_actions_penalty
         self.reward_on_reject_actions = reward_on_reject_actions # when input actions are larger than max_actions, reject it and end the env immediately. 
-        self.relaxed_max_min_actions = relaxed_max_min_actions
+        self.relaxed_max_min_actions = relaxed_max_min_actions # assume uss_subtracted = false.
+        if self.relaxed_max_min_actions:
+            assert self.uss_subtracted == False
 
         # now, select what to include during observations. by default we should have format like 
         # USS1, USS2, USS3, USS4, U1, U2, U3, U4, ESS, E, KF_X1, KF_X2, Z1, Z2, ..., Z30
@@ -81,13 +84,21 @@ class AtropineEnvGym(Env):
         except ValueError:
             raise Exception("observations must contain something! Need at least one array to concatenate")
         self.min_observations = np.zeros(self.observation_dim, dtype=np.float32)
-        self.max_actions = np.array([0.408, 0.125, 0.392, 0.214], dtype=np.float32) # from dataset
-        self.min_actions = np.array([0.4075, 0.105, 0.387, 0.208], dtype=np.float32) # from dataset
-        if self.relaxed_max_min_actions:
-            self.max_actions = np.array([0.5, 0.2, 0.5, 0.4], dtype=np.float32) # from dataset
-            self.min_actions = np.array([0.3, 0.0, 0.2, 0.1], dtype=np.float32) # from dataset
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
-        self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
+        if not self.uss_subtracted:
+            self.max_actions = np.array([0.408, 0.125, 0.392, 0.214], dtype=np.float32) # from dataset
+            self.min_actions = np.array([0.4075, 0.105, 0.387, 0.208], dtype=np.float32) # from dataset
+            if self.relaxed_max_min_actions:
+                self.max_actions = np.array([0.5, 0.2, 0.5, 0.4], dtype=np.float32) # from dataset
+                self.min_actions = np.array([0.3, 0.0, 0.2, 0.1], dtype=np.float32) # from dataset
+        else:
+            self.max_actions = np.array([2.0e-05, 1.3e-02, 2.0e-03, 4.0e-04], dtype=np.float32) # from dataset
+            self.min_actions = np.array([-0.00016, -0.0015, -0.00022, -0.00301], dtype=np.float32) # from dataset
+        if self.normalize:
+            self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
+            self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
+        else:
+            self.observation_space = spaces.Box(low=self.min_observations, high=self.max_observations, shape=(self.observation_dim,))
+            self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
         self.plant = Plant(ND1, ND2, ND3, V1, V2, V3, V4, dt)
         self.yss = self.plant.calculate_Efactor(DM(self.z0))  # steady state output, e-factor
 
@@ -126,13 +137,6 @@ class AtropineEnvGym(Env):
         return observation
 
     def step(self, action):
-        if self.reward_on_reject_actions: 
-            if (action > self.max_actions).any() or (action < self.min_actions).any():
-                reward = -100000.0
-                done = True
-                observation = np.zeros(self.observation_dim, dtype=np.float32)
-                return observation, reward, done, {"efactor": 100000.0, "previous_efactor": self.previous_efactor, "reward_on_steady": reward, "reward_on_absolute_efactor": reward, "reward_on_efactor_diff": reward}
-
         if self.max_steps == -1:
             done = False
         else:
@@ -140,7 +144,15 @@ class AtropineEnvGym(Env):
         action = np.array(action, dtype=np.float32)
         if self.normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
-        if self.uss_observable:
+            
+        if self.reward_on_reject_actions: 
+            if (action > self.max_actions).any() or (action < self.min_actions).any():
+                reward = -100000.0
+                done = True
+                observation = np.zeros(self.observation_dim, dtype=np.float32)
+                return observation, reward, done, {"efactor": 100000.0, "previous_efactor": self.previous_efactor, "reward_on_steady": reward, "reward_on_absolute_efactor": reward, "reward_on_efactor_diff": reward}
+
+        if self.uss_subtracted:
             uk = [
                     action[0] + USS[0],
                     action[1] + USS[1],
@@ -157,7 +169,9 @@ class AtropineEnvGym(Env):
         reward_on_absolute_efactor = -abs(efactor)
         reward_on_efactor_diff = self.previous_efactor - efactor
         previous_efactor = self.previous_efactor
-        if self.reward_on_steady:
+        if self.reward_on_ess_subtracted:
+            reward = self.yss - efactor # efactor the smaller the better
+        elif self.reward_on_steady:
             reward = reward_on_steady
         else:
             if self.reward_on_absolute_efactor:
@@ -196,10 +210,6 @@ class AtropineEnvGym(Env):
             raise Exception("observations must contain something! Need at least one array to concatenate")
         if self.normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
-        if self.reward_on_reject_actions: 
-            if (action > self.max_actions).any() or (action < self.min_actions).any():
-                reward = -100000.0
-                done = True
         self.t += 1
         return observation, reward, done, {"efactor": efactor, "previous_efactor": previous_efactor, "reward_on_steady": reward_on_steady, "reward_on_absolute_efactor": reward_on_absolute_efactor, "reward_on_efactor_diff": reward_on_efactor_diff}
         # state, reward, done, info in gym env term 
