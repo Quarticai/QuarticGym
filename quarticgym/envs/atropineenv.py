@@ -126,6 +126,13 @@ class AtropineEnvGym(Env):
         return observation
 
     def step(self, action):
+        if self.reward_on_reject_actions: 
+            if (action > self.max_actions).any() or (action < self.min_actions).any():
+                reward = -100000.0
+                done = True
+                observation = np.zeros(self.observation_dim, dtype=np.float32)
+                return observation, reward, done, {"efactor": 100000.0, "previous_efactor": self.previous_efactor, "reward_on_steady": reward, "reward_on_absolute_efactor": reward, "reward_on_efactor_diff": reward}
+
         if self.max_steps == -1:
             done = False
         else:
