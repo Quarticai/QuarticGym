@@ -22,8 +22,6 @@ class AtropineEnvGym(Env):
         self.reward_on_actions_penalty = reward_on_actions_penalty
         self.reward_on_reject_actions = reward_on_reject_actions # when input actions are larger than max_actions, reject it and end the env immediately. 
         self.relaxed_max_min_actions = relaxed_max_min_actions # assume uss_subtracted = false.
-        if self.relaxed_max_min_actions:
-            assert self.uss_subtracted == False
 
         # now, select what to include during observations. by default we should have format like 
         # USS1, USS2, USS3, USS4, U1, U2, U3, U4, ESS, E, KF_X1, KF_X2, Z1, Z2, ..., Z30
@@ -91,8 +89,11 @@ class AtropineEnvGym(Env):
                 self.max_actions = np.array([0.5, 0.2, 0.5, 0.4], dtype=np.float32) # from dataset
                 self.min_actions = np.array([0.3, 0.0, 0.2, 0.1], dtype=np.float32) # from dataset
         else:
-            self.max_actions = np.array([2.0e-05, 1.3e-02, 2.0e-03, 4.0e-04], dtype=np.float32) # from dataset
-            self.min_actions = np.array([-0.00016, -0.0015, -0.00022, -0.00301], dtype=np.float32) # from dataset
+            self.max_actions = np.array([1.92476206e-05, 1.22118426e-02, 1.82154982e-03, 3.59729230e-04], dtype=np.float32) # from dataset
+            self.min_actions = np.array([-0.00015742, -0.00146234, -0.00021812, -0.00300454], dtype=np.float32) # from dataset
+            if self.relaxed_max_min_actions:
+                self.max_actions = np.array([2.0e-05, 1.3e-02, 2.0e-03, 4.0e-04], dtype=np.float32) # from dataset
+                self.min_actions = np.array([-0.00016, -0.0015, -0.00022, -0.00301], dtype=np.float32) # from dataset
         if self.normalize:
             self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
             self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
@@ -136,7 +137,7 @@ class AtropineEnvGym(Env):
         
         return observation
 
-    def step(self, action):
+    def _step(self, action):
         if self.max_steps == -1:
             done = False
         else:
@@ -213,6 +214,15 @@ class AtropineEnvGym(Env):
         self.t += 1
         return observation, reward, done, {"efactor": efactor, "previous_efactor": previous_efactor, "reward_on_steady": reward_on_steady, "reward_on_absolute_efactor": reward_on_absolute_efactor, "reward_on_efactor_diff": reward_on_efactor_diff}
         # state, reward, done, info in gym env term 
+
+    def step(self, action):
+        try:
+            return self._step(action)
+        except Exception:
+            reward = -100000.0
+            done = True
+            observation = np.zeros(self.observation_dim, dtype=np.float32)
+            return observation, reward, done, {"efactor": 100000.0, "previous_efactor": self.previous_efactor, "reward_on_steady": reward, "reward_on_absolute_efactor": reward, "reward_on_efactor_diff": reward}
 
     def plot(self, show=False, efactor_fig_name=None, input_fig_name=None):
         target_efactor = [self.yss + self.yr] * self.num_sim
