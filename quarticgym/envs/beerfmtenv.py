@@ -70,8 +70,8 @@ class BeerFMTEnvGym(Env):
         self.dense_reward = dense_reward
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.action_space = spaces.Box(low=-1*observation_relaxation, high=1*observation_relaxation, shape=(self.observation_dim,))
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
+        self.observation_space = spaces.Box(low=-1*observation_relaxation, high=1*observation_relaxation, shape=(self.observation_dim,))
+        self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
         # ---- set by dataset or use predefined as you wish if applicable ----
         self.normalize = normalize
         self.max_observations = np.array(BEER_max, dtype=np.float32)
@@ -99,6 +99,7 @@ class BeerFMTEnvGym(Env):
     def reset(self):
         self.time = 0
         self.total_reward = 0
+        self.done = False
         observation = BEER_init
         self.prev_biomass = observation[0]+observation[1]+observation[2]
         observation = np.array(observation, dtype=np.float32)
