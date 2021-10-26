@@ -8,6 +8,7 @@ MAX_OBSERVATIONS = [1.0, 100.0, 1.0] # cA, T, h
 MIN_OBSERVATIONS = [0.0, 0.0, 0.0]
 MAX_ACTIONS = [100.0, 0.2] #Tc, qout
 MIN_ACTIONS = [0.0, 0.0]
+ERROR_REWARD = -100.0
 
 
 class ReactorModel:
@@ -84,40 +85,66 @@ class ReactorEnv(Env):
         self.max_steps = max_steps
 
         # ---- standard ----
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
-        self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,), dtype=np.float32)
         self.max_observations = np.array(MAX_OBSERVATIONS, dtype=np.float32)
         self.min_observations = np.array(MIN_OBSERVATIONS, dtype=np.float32)
         self.max_actions = np.array(MAX_ACTIONS, dtype=np.float32)
         self.min_actions = np.array(MIN_ACTIONS, dtype=np.float32)
+        if self.normalize:
+            self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
+            self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
+        else:
+            self.observation_space = spaces.Box(low=self.min_observations, high=self.max_observations, shape=(self.observation_dim,))
+            self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
         # ---- standard ----
         
         self.steady_observations = np.array([0.8778252, 51.34660837, 0.659], dtype=np.float32)
         self.steady_actions = np.array([26.85, 0.1], dtype=np.float32) 
         
     def sample_initial_state(self):
-        return np.maximum(np.random.normal(loc=[0.8778252, 51.34660837, 0.659], scale=[0.25, 25, 0.2]), 0, dtype=np.float32)
+        init_observation = np.maximum(np.random.normal(loc=[0.8778252, 51.34660837, 0.659], scale=[0.25, 25, 0.2]), 0, dtype=np.float32)
+        init_observation = init_observation.clip(self.min_observations, self.max_observations)
+        return init_observation
 
-    def reward_function_standard(self, previous_observation, action, current_observation):
+    def observation_beyond_box(self, observation):
+        return np.any(observation > self.max_observations) or np.any(observation < self.min_observations)
+
+    def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
+        # ---- standard ----
         # s, a, r, s, a
+        if reward is not None:
+            return reward
+        elif self.observation_beyond_box(current_observation):
+            return ERROR_REWARD
+        # ---- standard ----
         reward = - ( np.mean((current_observation - self.steady_observations) ** 2 / np.maximum((self.init_observation - self.steady_observations) ** 2, 1e-8)) )
         return reward
     
-    def done_calculator_standard(self, current_observation, step_count):
+    def done_calculator_standard(self, current_observation, step_count, done=None):
+        # ---- standard ----
+        if done is not None:
+            return done
+        elif self.observation_beyond_box(current_observation):
+            return True
+        # ---- standard ----
         if step_count >= self.max_steps: # same as range(0, max_steps)
             return True
         else:
             return False
 
-    def reset(self):
+    def reset(self, initial_state=None):
         # ---- standard ----
         self.step_count = 0
         self.total_reward = 0
         self.done = False
+        
+        if initial_state is not None:
+            initial_state = np.array(initial_state, dtype=np.float32)
+            observation = initial_state
+            self.init_observation = initial_state
+        else:
+            observation = self.sample_initial_state()
+            self.init_observation = observation
         # ---- standard ----
-
-        observation = self.sample_initial_state()
-        self.init_observation = observation
         self.previous_observation = observation
         self.reactor = ReactorModel(self.sampling_time)
         self.reactor.build_reactor_simulator()
@@ -137,15 +164,21 @@ class ReactorEnv(Env):
         if self.normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
         # ---- standard ----
+        try:
+            observation = self.reactor.step(self.previous_observation, action)
+        except:
+            # may encounter casadi error here.
+            observation = self.previous_observation
+            reward = ERROR_REWARD
+            done = True
 
-        observation = self.reactor.step(self.previous_observation, action)
+        # ---- standard ----
         # compute reward
         reward = self.reward_function(self.previous_observation, action, observation)
         # compute done
         done = self.done_calculator(observation, self.step_count)
         self.previous_observation = observation
 
-        # ---- standard ----
         self.total_reward += reward
         if self.dense_reward:
             reward = reward # conventional
@@ -153,8 +186,10 @@ class ReactorEnv(Env):
             reward = 0.0
         else:
             reward = self.total_reward
+        # clip observation so that it won't be beyond the box
+        observation = observation.clip(self.min_observations, self.max_observations)
         if self.normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.step_count += 1
-        # ---- standard ----
         return observation, reward, done, {}
+        # ---- standard ----
