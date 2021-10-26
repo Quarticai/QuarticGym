@@ -1,13 +1,14 @@
-import mpctools as mpc      # import mpctools: https://bitbucket.org/rawlings-group/mpc-tools-casadi/src/master/
+# import mpctools as mpc      # import mpctools: https://bitbucket.org/rawlings-group/mpc-tools-casadi/src/master/
+from scipy.integrate import solve_ivp
 import numpy as np
 from gym import spaces, Env
 from .utils import *
 
 
 MAX_OBSERVATIONS = [1.0, 100.0, 1.0] # cA, T, h
-MIN_OBSERVATIONS = [0.0, 0.0, 0.0]
-MAX_ACTIONS = [100.0, 0.2] #Tc, qout
-MIN_ACTIONS = [0.0, 0.0]
+MIN_OBSERVATIONS = [1e-08, 1e-08, 1e-08]
+MAX_ACTIONS = [26.85 * 1.05, 0.1 * 1.05] # Tc, qout
+MIN_ACTIONS = [26.85 * 0.95, 0.1 * 0.95]
 ERROR_REWARD = -100.0
 
 
@@ -41,29 +42,34 @@ class ReactorModel:
         Tc = u[0]       # Tc
         q = u[1]        # q_out
         
+        # try:
         rate = self.k0*c*np.exp(-self.E/(T+273.15))  # kmol/m^3/min
+        # except:
+        #     raise Exception(f"self.E: {self.E}")
         
         dxdt = [
-            self.q_in*(self.cAf - c)/(np.pi*self.r**2*h) - rate, # kmol/m^3/min
-            self.q_in*(self.Tf - T)/(np.pi*self.r**2*h) 
-                        - self.dH/(self.rho*self.Cp)*rate
-                        + 2*self.U/(self.r*self.rho*self.Cp)*(Tc - T), # degree C/min
-            (self.q_in - q)/(np.pi*self.r**2)     # m/min
+            self.q_in*(self.cAf - c)/(np.pi*self.r**2*h + 1e-8) - rate, # kmol/m^3/min
+            self.q_in*(self.Tf - T)/(np.pi*self.r**2*h + 1e-8) 
+                        - self.dH/(self.rho*self.Cp + 1e-8)*rate
+                        + 2*self.U/(self.r*self.rho*self.Cp + 1e-8)*(Tc - T), # degree C/min
+            (self.q_in - q)/(np.pi*self.r**2 + 1e-8)     # m/min
                 ]
         return dxdt
     
     # builds a reactor using mpctools and casadi
-    def build_reactor_simulator(self):
-        self.simulator = mpc.DiscreteSimulator(self.ode, self.sampling_time, [self.Nx, self.Nu], ["x", "u"])
+    # def build_reactor_simulator(self):
+    #     self.simulator = mpc.DiscreteSimulator(self.ode, self.sampling_time, [self.Nx, self.Nu], ["x", "u"])
     
     # integrates one sampling time or time step and returns the next state
     def step(self, x, u):
-        return self.simulator.sim(x,u)
+        # return self.simulator.sim(x,u)
+        sol = solve_ivp(lambda t,x,u:self.ode(x,u), [0, self.sampling_time], x, args=(u,), method='LSODA')
+        return sol.y[:,-1]
 
 
 class ReactorEnv(Env):
 
-    def __init__(self, dense_reward=True, normalize=True, action_dim=2, observation_dim=3, reward_function=None, done_calculator=None, # general env inputs
+    def __init__(self, dense_reward=True, normalize=True, action_dim=2, observation_dim=3, reward_function=None, done_calculator=None, max_observations=MAX_OBSERVATIONS, min_observations=MIN_OBSERVATIONS, max_actions=MAX_ACTIONS, min_actions=MIN_ACTIONS, error_reward=ERROR_REWARD, # general env inputs
     sampling_time=0.1, max_steps=100):
         # ---- standard ----
         self.step_count = 0
@@ -75,6 +81,11 @@ class ReactorEnv(Env):
         self.observation_dim = observation_dim
         self.reward_function = reward_function
         self.done_calculator = done_calculator
+        self.max_observations = max_observations
+        self.min_observations = min_observations
+        self.max_actions = max_actions
+        self.min_actions = min_actions
+        self.error_reward = error_reward
         if self.reward_function is None:
             self.reward_function = self.reward_function_standard
         if self.done_calculator is None:
@@ -85,10 +96,10 @@ class ReactorEnv(Env):
         self.max_steps = max_steps
 
         # ---- standard ----
-        self.max_observations = np.array(MAX_OBSERVATIONS, dtype=np.float32)
-        self.min_observations = np.array(MIN_OBSERVATIONS, dtype=np.float32)
-        self.max_actions = np.array(MAX_ACTIONS, dtype=np.float32)
-        self.min_actions = np.array(MIN_ACTIONS, dtype=np.float32)
+        self.max_observations = np.array(self.max_observations, dtype=np.float32)
+        self.min_observations = np.array(self.min_observations, dtype=np.float32)
+        self.max_actions = np.array(self.max_actions, dtype=np.float32)
+        self.min_actions = np.array(self.min_actions, dtype=np.float32)
         if self.normalize:
             self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
             self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
@@ -97,8 +108,8 @@ class ReactorEnv(Env):
             self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
         # ---- standard ----
         
-        self.steady_observations = np.array([0.8778252, 51.34660837, 0.659], dtype=np.float32)
-        self.steady_actions = np.array([26.85, 0.1], dtype=np.float32) 
+        self.steady_observations = np.array([0.8778252, 51.34660837, 0.659], dtype=np.float32) # cA, T, h
+        self.steady_actions = np.array([26.85, 0.1], dtype=np.float32) # Tc, qout
         
     def sample_initial_state(self):
         init_observation = np.maximum(np.random.normal(loc=[0.8778252, 51.34660837, 0.659], scale=[0.25, 25, 0.2]), 0, dtype=np.float32)
@@ -114,9 +125,10 @@ class ReactorEnv(Env):
         if reward is not None:
             return reward
         elif self.observation_beyond_box(current_observation):
-            return ERROR_REWARD
+            return self.error_reward
         # ---- standard ----
-        reward = - ( np.mean((current_observation - self.steady_observations) ** 2 / np.maximum((self.init_observation - self.steady_observations) ** 2, 1e-8)) )
+        reward = max(self.error_reward, - ( np.mean( (current_observation - self.steady_observations) ** 2 / np.maximum((self.init_observation - self.steady_observations) ** 2, 1e-8) ) ) )
+        assert isinstance(reward, float)
         return reward
     
     def done_calculator_standard(self, current_observation, step_count, done=None):
@@ -147,7 +159,7 @@ class ReactorEnv(Env):
         # ---- standard ----
         self.previous_observation = observation
         self.reactor = ReactorModel(self.sampling_time)
-        self.reactor.build_reactor_simulator()
+        # self.reactor.build_reactor_simulator()
         # self.x = np.zeros((self.max_steps+1, self.observation_dim))
         # self.x[0, :] = observation
         # self.u = np.zeros((self.max_steps, self.action_dim))
@@ -160,6 +172,8 @@ class ReactorEnv(Env):
 
     def step(self, action):
         # ---- standard ----
+        reward = None
+        done = None
         action = np.array(action, dtype=np.float32)
         if self.normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
@@ -169,14 +183,14 @@ class ReactorEnv(Env):
         except:
             # may encounter casadi error here.
             observation = self.previous_observation
-            reward = ERROR_REWARD
+            reward = self.error_reward
             done = True
 
         # ---- standard ----
         # compute reward
-        reward = self.reward_function(self.previous_observation, action, observation)
+        reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
         # compute done
-        done = self.done_calculator(observation, self.step_count)
+        done = self.done_calculator(observation, self.step_count, done=done)
         self.previous_observation = observation
 
         self.total_reward += reward
