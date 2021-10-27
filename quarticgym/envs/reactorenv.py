@@ -3,14 +3,20 @@ from scipy.integrate import solve_ivp
 import numpy as np
 from gym import spaces, Env
 from .utils import *
+# ---- to capture numpy warnings ---- 
+import warnings
+np.seterr(all='warn')
+# ---- to capture numpy warnings ---- 
+
 
 
 MAX_OBSERVATIONS = [1.0, 100.0, 1.0] # cA, T, h
 MIN_OBSERVATIONS = [1e-08, 1e-08, 1e-08]
-MAX_ACTIONS = [26.85 * 1.05, 0.1 * 1.05] # Tc, qout
-MIN_ACTIONS = [26.85 * 0.95, 0.1 * 0.95]
+MAX_ACTIONS = [35.0, 0.2] # Tc, qout
+MIN_ACTIONS = [15.0, 0.05]
+STEADY_OBSERVATIONS = [0.8778252, 51.34660837, 0.659]
+STEADY_ACTIONS = [26.85, 0.1]
 ERROR_REWARD = -100.0
-
 
 class ReactorModel:
     
@@ -70,7 +76,7 @@ class ReactorModel:
 class ReactorEnv(Env):
 
     def __init__(self, dense_reward=True, normalize=True, action_dim=2, observation_dim=3, reward_function=None, done_calculator=None, max_observations=MAX_OBSERVATIONS, min_observations=MIN_OBSERVATIONS, max_actions=MAX_ACTIONS, min_actions=MIN_ACTIONS, error_reward=ERROR_REWARD, # general env inputs
-    sampling_time=0.1, max_steps=100):
+    initial_state_scale=[0.25, 25, 0.2], np_dtype=np.float32, sampling_time=0.1, max_steps=100):
         # ---- standard ----
         self.step_count = 0
         self.total_reward = 0
@@ -92,14 +98,16 @@ class ReactorEnv(Env):
             self.done_calculator = self.done_calculator_standard
         # ---- standard ----
 
+        self.initial_state_scale = initial_state_scale
+        self.np_dtype = np_dtype
         self.sampling_time = sampling_time
         self.max_steps = max_steps
 
         # ---- standard ----
-        self.max_observations = np.array(self.max_observations, dtype=np.float32)
-        self.min_observations = np.array(self.min_observations, dtype=np.float32)
-        self.max_actions = np.array(self.max_actions, dtype=np.float32)
-        self.min_actions = np.array(self.min_actions, dtype=np.float32)
+        self.max_observations = np.array(self.max_observations, dtype=self.np_dtype)
+        self.min_observations = np.array(self.min_observations, dtype=self.np_dtype)
+        self.max_actions = np.array(self.max_actions, dtype=self.np_dtype)
+        self.min_actions = np.array(self.min_actions, dtype=self.np_dtype)
         if self.normalize:
             self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
             self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
@@ -108,11 +116,11 @@ class ReactorEnv(Env):
             self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
         # ---- standard ----
         
-        self.steady_observations = np.array([0.8778252, 51.34660837, 0.659], dtype=np.float32) # cA, T, h
-        self.steady_actions = np.array([26.85, 0.1], dtype=np.float32) # Tc, qout
+        self.steady_observations = np.array(STEADY_OBSERVATIONS, dtype=self.np_dtype) # cA, T, h
+        self.steady_actions = np.array(STEADY_ACTIONS, dtype=self.np_dtype) # Tc, qout
         
     def sample_initial_state(self):
-        init_observation = np.maximum(np.random.normal(loc=[0.8778252, 51.34660837, 0.659], scale=[0.25, 25, 0.2]), 0, dtype=np.float32)
+        init_observation = np.maximum(np.random.normal(loc=self.steady_observations, scale=self.initial_state_scale), 0, dtype=self.np_dtype)
         init_observation = init_observation.clip(self.min_observations, self.max_observations)
         return init_observation
 
@@ -150,7 +158,7 @@ class ReactorEnv(Env):
         self.done = False
         
         if initial_state is not None:
-            initial_state = np.array(initial_state, dtype=np.float32)
+            initial_state = np.array(initial_state, dtype=self.np_dtype)
             observation = initial_state
             self.init_observation = initial_state
         else:
@@ -174,17 +182,22 @@ class ReactorEnv(Env):
         # ---- standard ----
         reward = None
         done = None
-        action = np.array(action, dtype=np.float32)
+        action = np.array(action, dtype=self.np_dtype)
         if self.normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
         # ---- standard ----
-        try:
-            observation = self.reactor.step(self.previous_observation, action)
-        except:
-            # may encounter casadi error here.
-            observation = self.previous_observation
-            reward = self.error_reward
-            done = True
+
+        # ---- to capture numpy warnings ---- 
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("error")
+            try:
+                observation = self.reactor.step(self.previous_observation, action)
+            except Exception as e:
+                print("Got Exception/Warning: ", e)
+                observation = self.previous_observation
+                reward = self.error_reward
+                done = True
+        # ---- to capture numpy warnings ---- 
 
         # ---- standard ----
         # compute reward
