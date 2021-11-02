@@ -19,7 +19,12 @@ pip install pensimpy
 ### BeerFMT
 BeerFMT simulates the Beer Fermentation process.
 
+### AtropineEnv
+AtropineEnv simulates an atropine production environment to accommodate the [Atropine_Challenge](https://github.com/Quarticai/Atropine-Challenge).
+
+### ReactorEnv
+ReactorEnv simulates a general reactor environment. This is supposed to be an template environment. The documentations in that file is enhanced and provided comment lines (# ---- standard ---- and # /---- standard ----) enclose pieces of code that should be reused by most of QuarticGym environments. I will extend some of them into a base class in the future.
+
 Examples
 ============
 Please consult [our jupyter notebook](examples.ipynb)
-
