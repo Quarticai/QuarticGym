@@ -19,7 +19,7 @@ MAX_ACTIONS = [35.0, 0.2] # Tc, qout
 MIN_ACTIONS = [15.0, 0.05]
 STEADY_OBSERVATIONS = [0.8778252, 51.34660837, 0.659]
 STEADY_ACTIONS = [26.85, 0.1]
-ERROR_REWARD = -100.0
+ERROR_REWARD = -1000.0
 
 class ReactorModel:
     
@@ -128,7 +128,7 @@ class ReactorEnv(Env):
         """
         check if the observation is beyond the box, which is what we don't want.
         """
-        return np.any(observation > self.max_observations) or np.any(observation < self.min_observations)
+        return np.any(observation > self.max_observations) or np.any(observation < self.min_observations) or np.any(np.isnan(observation)) or np.any(np.isinf(observation))
     # /---- standard ----
 
     def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
@@ -154,7 +154,7 @@ class ReactorEnv(Env):
         return reward
         # /---- standard ----
     
-        # ---- standard ----
+    # ---- standard ----
     def done_calculator_standard(self, current_observation, step_count, done=None):
         """
         check whether the current episode is considered finished.
@@ -247,12 +247,13 @@ class ReactorEnv(Env):
         return observation, reward, done, {}
         # /---- standard ----
 
-    def evalute_algorithms(self, algorithms, num_episodes=1, initial_states=None, plot_dir='./plt_results'):
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
         # ---- standard ----
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
         algorithms: list of (algorithm, algorithm_name, normalize). algorithm has to have a method predict(observation) -> action: np.ndarray.
         num_episodes: number of episodes to run
+        error_reward: to work with Xiaozhou's evaluation script
         initial_states: None or list of initial states
         plot_dir: None or directory to save plots
         returns: list of average_rewards over each episode and num of episodes
@@ -262,6 +263,7 @@ class ReactorEnv(Env):
         except AssertionError:
             print("env.normalize should be False when executing evalute_algorithms")
             self.normalize = False
+        self.error_reward = error_reward
         if plot_dir is not None:
             mkdir_p(plot_dir)
         if initial_states is None:
@@ -347,9 +349,11 @@ class ReactorEnv(Env):
                 plt.savefig(path_name)
             plt.close()
 
-        for n_algo in range(len(algorithms)):
-            mean_rewards[n_algo] = np.mean(mean_rewards[n_algo])
-        return mean_rewards
+        rewards_mean_over_episodes = [np.mean(mean_rewards[n_algo]) for n_algo in range(len(algorithms))]
+        rewards_std_over_episodes = [np.std(mean_rewards[n_algo]) for n_algo in range(len(algorithms))]
+        rewards_mean_over_episodes = np.array(rewards_mean_over_episodes)
+        rewards_std_over_episodes = np.array(rewards_std_over_episodes)
+        return rewards_mean_over_episodes, rewards_std_over_episodes
         # /---- standard ----
 
     def sample_initial_state(self):
