@@ -3,6 +3,7 @@ import numpy as np
 from gym import spaces, Env # to create an openai-gym environment https://gym.openai.com/
 from tqdm import tqdm
 from .utils import *
+import json
 
 import matplotlib.pyplot as plt
 import os
@@ -270,16 +271,15 @@ class ReactorEnv(Env):
             initial_states = [self.sample_initial_state() for _ in range(num_episodes)]
         else:
             assert len(initial_states) == num_episodes
-        mean_rewards = [[] for _ in range(len(algorithms))]
+        observations_list = [[] for _ in range(len(algorithms))] # observations_list[i][j][t][k] is algorithm_i_game_j_observation_t_element_k
+        actions_list = [[] for _ in range(len(algorithms))] # actions_list[i][j][t][k] is algorithm_i_game_j_action_t_element_k
+        rewards_list = [[] for _ in range(len(algorithms))] # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
         for n_epi in tqdm(range(num_episodes)):
-            total_observes = []
-            total_actions = []
-            total_rewards = []
             for n_algo in range(len(algorithms)):
                 algo, algo_name, normalize = algorithms[n_algo]
                 algo_observes = []
                 algo_actions = []
-                algo_rewards = []
+                algo_rewards = [] #list, for this algorithm, reawards of this trajectory.
                 init_obs = self.reset(initial_state=initial_states[n_epi])
                 # algo_observes.append(init_obs)
                 o = init_obs
@@ -294,10 +294,9 @@ class ReactorEnv(Env):
                     o, r, done, _ = self.step(a)
                     algo_observes.append(o)
                     algo_rewards.append(r)
-                total_observes.append(np.array(algo_observes))
-                total_actions.append(np.array(algo_actions))
-                total_rewards.append(np.array(algo_rewards))
-                mean_rewards[n_algo].append(np.mean(algo_rewards))
+                observations_list[n_algo].append(algo_observes)
+                actions_list[n_algo].append(algo_actions)
+                rewards_list[n_algo].append(algo_rewards)
             # plot observations
             for n_o in range(self.observation_dim):
                 o_name = self.observation_name[n_o]
@@ -307,7 +306,7 @@ class ReactorEnv(Env):
                 plt.title(f"{o_name}")
                 for n_algo in range(len(algorithms)):
                     _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(total_observes[n_algo][:, n_o], label=algo_name)
+                    plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name)
                 plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
                 plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
                 plt.xticks(np.arange(1, self.max_steps + 2, 1))
@@ -326,7 +325,7 @@ class ReactorEnv(Env):
                 plt.title(f"{a_name}")
                 for n_algo in range(len(algorithms)):
                     _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(total_actions[n_algo][:, n_a], label=algo_name)
+                    plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name)
                 plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
                 plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
                 plt.legend()
@@ -341,7 +340,7 @@ class ReactorEnv(Env):
             plt.title("reward")
             for n_algo in range(len(algorithms)):
                 _, algo_name, _ = algorithms[n_algo]
-                plt.plot(total_rewards[n_algo], label=algo_name)
+                plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name)
             plt.xticks(np.arange(1, self.max_steps + 2, 1))
             plt.legend()
             if plot_dir is not None:
@@ -349,12 +348,35 @@ class ReactorEnv(Env):
                 plt.savefig(path_name)
             plt.close()
 
-        rewards_mean_over_episodes = [np.mean(mean_rewards[n_algo]) for n_algo in range(len(algorithms))]
-        rewards_std_over_episodes = [np.std(mean_rewards[n_algo]) for n_algo in range(len(algorithms))]
-        rewards_mean_over_episodes = np.array(rewards_mean_over_episodes)
-        rewards_std_over_episodes = np.array(rewards_std_over_episodes)
-        return rewards_mean_over_episodes, rewards_std_over_episodes
+        observations_list = np.array(observations_list)
+        actions_list = np.array(actions_list)
+        rewards_list = np.array(rewards_list)
+        return observations_list, actions_list, rewards_list
         # /---- standard ----
+        
+    def evaluate_rewards_mean_std_over_episodes(self,algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
+        """
+        returns: mean and std of rewards over all episodes
+        """
+        result_dict = {}
+        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes, error_reward=error_reward, initial_states=initial_states, plot_dir=plot_dir)
+        for n_algo in range(len(algorithms)):
+            _, algo_name, _ = algorithms[n_algo]
+            rewards_list_curr_algo = rewards_list[n_algo]
+            rewards_mean_over_episodes = [] # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
+            for n_epi in range(num_episodes):
+                if rewards_list_curr_algo[n_epi][-1] == error_reward:
+                    rewards_mean_over_episodes.append(error_reward)
+                else:
+                    rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
+            rewards_mean = np.mean(rewards_mean_over_episodes)
+            rewards_std = np.std(rewards_mean_over_episodes)
+            print(f"{algo_name}_reward_mean: {rewards_mean}")
+            result_dict[algo_name + "_reward_mean"] = rewards_mean
+            print(f"{algo_name}_reward_std: {rewards_std}")
+            result_dict[algo_name + "_reward_std"] = rewards_std
+        json.dump(result_dict, open(os.path.join(plot_dir, 'result.json'), 'w+'))
+        return observations_list, actions_list, rewards_list
 
     def sample_initial_state(self):
         init_observation = np.maximum(np.random.normal(loc=self.steady_observations, scale=self.initial_state_scale), 0, dtype=self.np_dtype)
