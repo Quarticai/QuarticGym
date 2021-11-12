@@ -156,7 +156,7 @@ class ReactorEnv(Env):
         # /---- standard ----
     
     # ---- standard ----
-    def done_calculator_standard(self, current_observation, step_count, done=None):
+    def done_calculator_standard(self, current_observation, step_count, reward, done=None):
         """
         check whether the current episode is considered finished.
         """
@@ -164,7 +164,9 @@ class ReactorEnv(Env):
             return done
         elif self.observation_beyond_box(current_observation):
             return True
-        if step_count >= self.max_steps: # same as range(0, max_steps)
+        elif step_count >= self.max_steps: # same as range(0, max_steps)
+            return True
+        elif reward == self.error_reward:
             return True
         else:
             return False
@@ -232,7 +234,7 @@ class ReactorEnv(Env):
             reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
         # compute done
         if not done:
-            done = self.done_calculator(observation, self.step_count, done=done)
+            done = self.done_calculator(observation, self.step_count, reward, done=done)
         self.previous_observation = observation
 
         self.total_reward += reward
