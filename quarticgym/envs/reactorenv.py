@@ -228,9 +228,11 @@ class ReactorEnv(Env):
 
         # ---- standard ----
         # compute reward
-        reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
+        if not reward:
+            reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
         # compute done
-        done = self.done_calculator(observation, self.step_count, done=done)
+        if not done:
+            done = self.done_calculator(observation, self.step_count, done=done)
         self.previous_observation = observation
 
         self.total_reward += reward
