@@ -74,7 +74,7 @@ class ReactorModel:
 class ReactorEnv(Env):
 
     def __init__(self, dense_reward=True, normalize=True, debug_mode=False, action_dim=2, observation_dim=3, reward_function=None, done_calculator=None, max_observations=MAX_OBSERVATIONS, min_observations=MIN_OBSERVATIONS, max_actions=MAX_ACTIONS, min_actions=MIN_ACTIONS, error_reward=ERROR_REWARD, # general env inputs
-    initial_state_scale=[0.25, 25, 0.2], compute_diffs_on_reward=False, np_dtype=np.float32, sampling_time=0.1, max_steps=100):
+    initial_state_deviation_ratio=0.3, compute_diffs_on_reward=False, np_dtype=np.float32, sampling_time=0.1, max_steps=100):
         # ---- standard ----
         # define arguments
         self.step_count = 0
@@ -98,7 +98,6 @@ class ReactorEnv(Env):
             self.done_calculator = self.done_calculator_standard
         # /---- standard ----
 
-        self.initial_state_scale = initial_state_scale # to use by the initial_state_generator
         self.compute_diffs_on_reward = compute_diffs_on_reward # how the reward is computed, if True, then the reward is computed as the difference between the current state and the previous state
         self.np_dtype = np_dtype
         self.sampling_time = sampling_time
@@ -123,6 +122,7 @@ class ReactorEnv(Env):
         
         self.steady_observations = np.array(STEADY_OBSERVATIONS, dtype=self.np_dtype) # cA, T, h
         self.steady_actions = np.array(STEADY_ACTIONS, dtype=self.np_dtype) # Tc, qout
+        self.initial_state_deviation_ratio = initial_state_deviation_ratio
 
     # ---- standard ----
     def observation_beyond_box(self, observation):
@@ -383,7 +383,8 @@ class ReactorEnv(Env):
         return observations_list, actions_list, rewards_list
 
     def sample_initial_state(self):
-        init_observation = np.maximum(np.random.normal(loc=self.steady_observations, scale=self.initial_state_scale), 0, dtype=self.np_dtype)
+        init_observation = np.maximum(np.random.uniform(low=(1-self.initial_state_deviation_ratio)*self.steady_observations, high=(1+self.initial_state_deviation_ratio)*self.steady_observations), 0, 
+            dtype=self.np_dtype)
         init_observation = init_observation.clip(self.min_observations, self.max_observations)
         return init_observation
 
