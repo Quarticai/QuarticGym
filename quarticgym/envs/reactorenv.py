@@ -53,14 +53,14 @@ class ReactorModel:
         q = u[1]        # q_out
         
         rate = self.k0*c*np.exp(-self.E/(T+273.15))  # kmol/m^3/min
-        
+
         dxdt = [
-            self.q_in*(self.cAf - c)/(np.pi*self.r**2*h + 1e-8) - rate, # kmol/m^3/min
-            self.q_in*(self.Tf - T)/(np.pi*self.r**2*h + 1e-8) 
-                        - self.dH/(self.rho*self.Cp + 1e-8)*rate
-                        + 2*self.U/(self.r*self.rho*self.Cp + 1e-8)*(Tc - T), # degree C/min
-            (self.q_in - q)/(np.pi*self.r**2 + 1e-8)     # m/min
-                ]
+            self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8) - rate,  # kmol/m^3/min
+            self.q_in * (self.Tf - T) / (np.pi * self.r ** 2 * h + 1e-8)
+            - self.dH / (self.rho * self.Cp) * rate
+            + self.U / (np.pi * self.r ** 2 * h * self.rho * self.Cp + + 1e-8) * (Tc - T),  # degree C/min
+            (self.q_in - q) / (np.pi * self.r ** 2)  # m/min
+        ]
         return dxdt
     
     
