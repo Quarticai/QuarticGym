@@ -45,23 +45,25 @@ class ReactorModel:
     
     # Ordinary Differential Equations (ODEs) described in the report i.e. Equations (1), (2), (3)
     def ode(self, x, u):
-    
+
         c = x[0]        # c_A
         T = x[1]        # T
         h = x[2]        # h
         Tc = u[0]       # Tc
         q = u[1]        # q_out
-        
+
         rate = self.k0*c*np.exp(-self.E_divided_by_R / (T + 273.15))  # kmol/m^3/min
 
-        dxdt = [
-            self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8) - rate,  # kmol/m^3/min
+        return [
+            self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8)
+            - rate,  # kmol/m^3/min
             self.q_in * (self.Tf - T) / (np.pi * self.r ** 2 * h + 1e-8)
             - self.dH / (self.rho * self.Cp) * rate
-            + self.U / (np.pi * self.r ** 2 * h * self.rho * self.Cp + + 1e-8) * (Tc - T),  # degree C/min
-            (self.q_in - q) / (np.pi * self.r ** 2)  # m/min
+            + self.U
+            / (np.pi * self.r ** 2 * h * self.rho * self.Cp + +1e-8)
+            * (Tc - T),  # degree C/min
+            (self.q_in - q) / (np.pi * self.r ** 2),  # m/min
         ]
-        return dxdt
     
     
     # integrates one sampling time or time step and returns the next state
