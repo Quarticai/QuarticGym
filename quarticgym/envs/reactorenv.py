@@ -1,6 +1,6 @@
-from scipy.integrate import solve_ivp  # the ode solver
+from scipy.integrate import solve_ivp # the ode solver
 import numpy as np
-from gym import spaces, Env  # to create an openai-gym environment https://gym.openai.com/
+from gym import spaces, Env # to create an openai-gym environment https://gym.openai.com/
 from tqdm import tqdm
 from .utils import *
 import json
@@ -9,50 +9,50 @@ import matplotlib.pyplot as plt
 import os
 # ---- to capture numpy warnings ---- 
 import warnings
-
 np.seterr(all='warn')
 # ---- to capture numpy warnings ---- 
 
 
 # macros the defined by the reactor
-MAX_OBSERVATIONS = [1.0, 100.0, 1.0]  # cA, T, h
+MAX_OBSERVATIONS = [1.0, 100.0, 1.0] # cA, T, h
 MIN_OBSERVATIONS = [1e-08, 1e-08, 1e-08]
-MAX_ACTIONS = [35.0, 0.2]  # Tc, qout
+MAX_ACTIONS = [35.0, 0.2] # Tc, qout
 MIN_ACTIONS = [15.0, 0.05]
 STEADY_OBSERVATIONS = [0.8778252, 51.34660837, 0.659]
 STEADY_ACTIONS = [26.85, 0.1]
 ERROR_REWARD = -1000.0
 
-
 class ReactorModel:
-
+    
     def __init__(self, sampling_time):
+        
         # Define reactor model parameters
-        self.q_in = .1  # m^3/min
-        self.Tf = 76.85  # degrees C
-        self.cAf = 1.0  # kmol/m^3
-        self.r = .219  # m
-        self.k0 = 7.2e10  # min^-1
-        self.E_divided_by_R = 8750  # K
-        self.U = 54.94  # kg/min/m^2/K
-        self.rho = 1000  # kg/m^3
-        self.Cp = .239  # kJ/kg/K
-        self.dH = -5e4  # kJ/kmol
-
-        self.Nx = 3  # Number of state variables
-        self.Nu = 2  # Number of input variables
-
-        self.sampling_time = sampling_time  # sampling time or integration step
-
+        self.q_in = .1        # m^3/min
+        self.Tf = 76.85     # degrees C
+        self.cAf = 1.0       # kmol/m^3
+        self.r = .219       # m
+        self.k0 = 7.2e10    # min^-1
+        self.E_divided_by_R = 8750       # K
+        self.U = 54.94      # kg/min/m^2/K
+        self.rho = 1000     # kg/m^3
+        self.Cp = .239      # kJ/kg/K
+        self.dH = -5e4      # kJ/kmol
+        
+        self.Nx = 3         # Number of state variables
+        self.Nu = 2         # Number of input variables
+        
+        self.sampling_time = sampling_time      # sampling time or integration step
+    
     # Ordinary Differential Equations (ODEs) described in the report i.e. Equations (1), (2), (3)
     def ode(self, x, u):
-        c = x[0]  # c_A
-        T = x[1]  # T
-        h = x[2]  # h
-        Tc = u[0]  # Tc
-        q = u[1]  # q_out
-
-        rate = self.k0 * c * np.exp(-self.E_divided_by_R / (T + 273.15))  # kmol/m^3/min
+    
+        c = x[0]        # c_A
+        T = x[1]        # T
+        h = x[2]        # h
+        Tc = u[0]       # Tc
+        q = u[1]        # q_out
+        
+        rate = self.k0*c*np.exp(-self.E_divided_by_R / (T + 273.15))  # kmol/m^3/min
 
         dxdt = [
             self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8) - rate,  # kmol/m^3/min
@@ -62,34 +62,31 @@ class ReactorModel:
             (self.q_in - q) / (np.pi * self.r ** 2)  # m/min
         ]
         return dxdt
-
+    
+    
     # integrates one sampling time or time step and returns the next state
     def step(self, x, u):
         # return self.simulator.sim(x,u)
-        sol = solve_ivp(lambda t, x, u: self.ode(x, u), [0, self.sampling_time], x, args=(u,), method='LSODA')
-        return sol.y[:, -1]
+        sol = solve_ivp(lambda t,x,u:self.ode(x,u), [0, self.sampling_time], x, args=(u,), method='LSODA')
+        return sol.y[:,-1]
 
 
 class ReactorEnv(Env):
 
-    def __init__(self, dense_reward=True, normalize=True, debug_mode=False, action_dim=2, observation_dim=3,
-                 reward_function=None, done_calculator=None, max_observations=MAX_OBSERVATIONS,
-                 min_observations=MIN_OBSERVATIONS, max_actions=MAX_ACTIONS, min_actions=MIN_ACTIONS,
-                 error_reward=ERROR_REWARD,  # general env inputs
-                 initial_state_deviation_ratio=0.3, compute_diffs_on_reward=False, np_dtype=np.float32,
-                 sampling_time=0.1, max_steps=100):
+    def __init__(self, dense_reward=True, normalize=True, debug_mode=False, action_dim=2, observation_dim=3, reward_function=None, done_calculator=None, max_observations=MAX_OBSERVATIONS, min_observations=MIN_OBSERVATIONS, max_actions=MAX_ACTIONS, min_actions=MIN_ACTIONS, error_reward=ERROR_REWARD, # general env inputs
+    initial_state_deviation_ratio=0.3, compute_diffs_on_reward=False, np_dtype=np.float32, sampling_time=0.1, max_steps=100):
         # ---- standard ----
         # define arguments
         self.step_count = 0
         self.total_reward = 0
         self.done = False
         self.dense_reward = dense_reward
-        self.normalize = normalize  # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
-        self.debug_mode = debug_mode  # to print debug information.
+        self.normalize = normalize # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
+        self.debug_mode = debug_mode # to print debug information.
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
-        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.reward_function = reward_function # if not satisfied with in-house reward function, you can use your own
+        self.done_calculator = done_calculator # if not satisfied with in-house finish calculator, you can use your own
         self.max_observations = max_observations
         self.min_observations = min_observations
         self.max_actions = max_actions
@@ -101,7 +98,7 @@ class ReactorEnv(Env):
             self.done_calculator = self.done_calculator_standard
         # /---- standard ----
 
-        self.compute_diffs_on_reward = compute_diffs_on_reward  # how the reward is computed, if True, then the reward is computed as the difference between the current state and the previous state
+        self.compute_diffs_on_reward = compute_diffs_on_reward # how the reward is computed, if True, then the reward is computed as the difference between the current state and the previous state
         self.np_dtype = np_dtype
         self.sampling_time = sampling_time
         self.max_steps = max_steps
@@ -119,13 +116,12 @@ class ReactorEnv(Env):
             self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
             self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
         else:
-            self.observation_space = spaces.Box(low=self.min_observations, high=self.max_observations,
-                                                shape=(self.observation_dim,))
+            self.observation_space = spaces.Box(low=self.min_observations, high=self.max_observations, shape=(self.observation_dim,))
             self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
         # /---- standard ----
-
-        self.steady_observations = np.array(STEADY_OBSERVATIONS, dtype=self.np_dtype)  # cA, T, h
-        self.steady_actions = np.array(STEADY_ACTIONS, dtype=self.np_dtype)  # Tc, qout
+        
+        self.steady_observations = np.array(STEADY_OBSERVATIONS, dtype=self.np_dtype) # cA, T, h
+        self.steady_actions = np.array(STEADY_ACTIONS, dtype=self.np_dtype) # Tc, qout
         self.initial_state_deviation_ratio = initial_state_deviation_ratio
 
     # ---- standard ----
@@ -133,9 +129,7 @@ class ReactorEnv(Env):
         """
         check if the observation is beyond the box, which is what we don't want.
         """
-        return np.any(observation > self.max_observations) or np.any(observation < self.min_observations) or np.any(
-            np.isnan(observation)) or np.any(np.isinf(observation))
-
+        return np.any(observation > self.max_observations) or np.any(observation < self.min_observations) or np.any(np.isnan(observation)) or np.any(np.isinf(observation))
     # /---- standard ----
 
     def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
@@ -155,12 +149,12 @@ class ReactorEnv(Env):
         else:
             reward = current_observation_evaluated
         # ---- standard ----
-        reward = max(self.error_reward, reward)  # reward cannot be smaller than the error_reward
+        reward = max(self.error_reward, reward) # reward cannot be smaller than the error_reward
         if self.debug_mode:
             print("reward:", reward)
         return reward
         # /---- standard ----
-
+    
     # ---- standard ----
     def done_calculator_standard(self, current_observation, step_count, reward, done=None):
         """
@@ -170,7 +164,7 @@ class ReactorEnv(Env):
             return done
         elif self.observation_beyond_box(current_observation):
             return True
-        elif step_count >= self.max_steps:  # same as range(0, max_steps)
+        elif step_count >= self.max_steps: # same as range(0, max_steps)
             return True
         elif reward == self.error_reward:
             return True
@@ -187,7 +181,7 @@ class ReactorEnv(Env):
         self.step_count = 0
         self.total_reward = 0
         self.done = False
-
+        
         if initial_state is not None:
             initial_state = np.array(initial_state, dtype=self.np_dtype)
             observation = initial_state
@@ -245,7 +239,7 @@ class ReactorEnv(Env):
 
         self.total_reward += reward
         if self.dense_reward:
-            reward = reward  # conventional
+            reward = reward # conventional
         elif not done:
             reward = 0.0
         else:
@@ -258,8 +252,7 @@ class ReactorEnv(Env):
         return observation, reward, done, {}
         # /---- standard ----
 
-    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None,
-                           plot_dir='./plt_results'):
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
         # ---- standard ----
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
@@ -282,17 +275,15 @@ class ReactorEnv(Env):
             initial_states = [self.sample_initial_state() for _ in range(num_episodes)]
         else:
             assert len(initial_states) == num_episodes
-        observations_list = [[] for _ in range(
-            len(algorithms))]  # observations_list[i][j][t][k] is algorithm_i_game_j_observation_t_element_k
-        actions_list = [[] for _ in
-                        range(len(algorithms))]  # actions_list[i][j][t][k] is algorithm_i_game_j_action_t_element_k
-        rewards_list = [[] for _ in range(len(algorithms))]  # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
+        observations_list = [[] for _ in range(len(algorithms))] # observations_list[i][j][t][k] is algorithm_i_game_j_observation_t_element_k
+        actions_list = [[] for _ in range(len(algorithms))] # actions_list[i][j][t][k] is algorithm_i_game_j_action_t_element_k
+        rewards_list = [[] for _ in range(len(algorithms))] # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
         for n_epi in tqdm(range(num_episodes)):
             for n_algo in range(len(algorithms)):
                 algo, algo_name, normalize = algorithms[n_algo]
                 algo_observes = []
                 algo_actions = []
-                algo_rewards = []  # list, for this algorithm, reawards of this trajectory.
+                algo_rewards = [] #list, for this algorithm, reawards of this trajectory.
                 init_obs = self.reset(initial_state=initial_states[n_epi])
                 # algo_observes.append(init_obs)
                 o = init_obs
@@ -320,10 +311,8 @@ class ReactorEnv(Env):
                 for n_algo in range(len(algorithms)):
                     _, algo_name, _ = algorithms[n_algo]
                     plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name)
-                plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--",
-                         label=f"initial_{o_name}")
-                plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.",
-                         label=f"steady_{o_name}")
+                plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
+                plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
                 plt.xticks(np.arange(1, self.max_steps + 2, 1))
                 plt.legend()
                 if plot_dir is not None:
@@ -341,9 +330,8 @@ class ReactorEnv(Env):
                 for n_algo in range(len(algorithms)):
                     _, algo_name, _ = algorithms[n_algo]
                     plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name)
-                plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.",
-                         label=f"steady_{a_name}")
-                plt.xticks(np.arange(1, self.max_steps + 2, 1))
+                plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
+                plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
                 plt.legend()
                 if plot_dir is not None:
                     path_name = os.path.join(plot_dir, f"{n_epi}_action_{a_name}.png")
@@ -369,21 +357,17 @@ class ReactorEnv(Env):
         rewards_list = np.array(rewards_list)
         return observations_list, actions_list, rewards_list
         # /---- standard ----
-
-    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-1000.0,
-                                                initial_states=None, plot_dir='./plt_results'):
+        
+    def evaluate_rewards_mean_std_over_episodes(self,algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
         """
         returns: mean and std of rewards over all episodes
         """
         result_dict = {}
-        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes,
-                                                                                error_reward=error_reward,
-                                                                                initial_states=initial_states,
-                                                                                plot_dir=plot_dir)
+        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes, error_reward=error_reward, initial_states=initial_states, plot_dir=plot_dir)
         for n_algo in range(len(algorithms)):
             _, algo_name, _ = algorithms[n_algo]
             rewards_list_curr_algo = rewards_list[n_algo]
-            rewards_mean_over_episodes = []  # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
+            rewards_mean_over_episodes = [] # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
             for n_epi in range(num_episodes):
                 if rewards_list_curr_algo[n_epi][-1] == error_reward:
                     rewards_mean_over_episodes.append(error_reward)
@@ -399,9 +383,7 @@ class ReactorEnv(Env):
         return observations_list, actions_list, rewards_list
 
     def sample_initial_state(self):
-        init_observation = np.maximum(
-            np.random.uniform(low=(1 - self.initial_state_deviation_ratio) * self.steady_observations,
-                              high=(1 + self.initial_state_deviation_ratio) * self.steady_observations), 0,
+        init_observation = np.maximum(np.random.uniform(low=(1-self.initial_state_deviation_ratio)*self.steady_observations, high=(1+self.initial_state_deviation_ratio)*self.steady_observations), 0, 
             dtype=self.np_dtype)
         init_observation = init_observation.clip(self.min_observations, self.max_observations)
         return init_observation
@@ -412,7 +394,6 @@ class ReactorEnv(Env):
         observation: numpy array of shape (self.observation_dim)
         returns: observation evaluation (reward in a sense)
         """
-        scale_factor = 100.0  # constant makes the error not too small
-        relative_error = (observation - self.steady_observations) / np.maximum(self.steady_observations, 1e-8)
-        return float((-1) * np.mean((relative_error ** 2)) * scale_factor)
+        
+        return float( - ( np.mean( (observation - self.steady_observations) ** 2 / np.maximum((self.init_observation - self.steady_observations) ** 2, 1e-8) ) ) )
     # /---- standard ----
