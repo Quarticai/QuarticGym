@@ -251,6 +251,28 @@ class ReactorEnv(Env):
         self.step_count += 1
         return observation, reward, done, {}
         # /---- standard ----
+        
+    def evenly_spread_initial_states(self, val_per_state, dump_location=None):
+        initial_state_deviation_ratio=self.initial_state_deviation_ratio
+        steady_observations=self.steady_observations
+        len_obs = len(steady_observations)
+        val_range = val_per_state**len_obs
+        initial_states = np.zeros([val_range,len_obs])
+        tmp_o = []
+        for oi in range(len_obs):
+            tmp_o.append(np.linspace(steady_observations[oi] * (1.0-initial_state_deviation_ratio), steady_observations[oi] * (1.0+initial_state_deviation_ratio), num=val_per_state, endpoint=True))
+
+        for i in range(val_range):
+            tmp_val_range = i
+            curr_val = []
+            for oi in range(len_obs):
+                rmder = tmp_val_range % val_per_state
+                curr_val.append(tmp_o[oi][rmder])
+                tmp_val_range = int((tmp_val_range - rmder) / val_per_state)
+            initial_states[i] = curr_val
+        if dump_location is not None:
+            np.save(dump_location, initial_states)
+        return initial_states    
 
     def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
         # ---- standard ----
@@ -259,7 +281,7 @@ class ReactorEnv(Env):
         algorithms: list of (algorithm, algorithm_name, normalize). algorithm has to have a method predict(observation) -> action: np.ndarray.
         num_episodes: number of episodes to run
         error_reward: to work with Xiaozhou's evaluation script
-        initial_states: None or list of initial states
+        initial_states: None, location of numpy file of initial states or a (numpy) list of initial states
         plot_dir: None or directory to save plots
         returns: list of average_rewards over each episode and num of episodes
         """
@@ -273,8 +295,9 @@ class ReactorEnv(Env):
             mkdir_p(plot_dir)
         if initial_states is None:
             initial_states = [self.sample_initial_state() for _ in range(num_episodes)]
-        else:
-            assert len(initial_states) == num_episodes
+        elif isinstance(initial_states, str):
+            initial_states = np.load(initial_states)
+        assert len(initial_states) == num_episodes
         observations_list = [[] for _ in range(len(algorithms))] # observations_list[i][j][t][k] is algorithm_i_game_j_observation_t_element_k
         actions_list = [[] for _ in range(len(algorithms))] # actions_list[i][j][t][k] is algorithm_i_game_j_action_t_element_k
         rewards_list = [[] for _ in range(len(algorithms))] # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
