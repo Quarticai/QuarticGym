@@ -4,13 +4,12 @@ from torch.utils.data import Dataset
 class TorchDatasetFromD4RL(Dataset):
     def __init__(self, dataset_d4rl) -> None:
         import d3rlpy
-        # super().__init__()
         """
-        dataset_d4rl should be returned by lbd_data_obj.get_dataset()
+        dataset_d4rl should be a dictionary in the d4rl dataset format.
         """
         self.dataset = d3rlpy.dataset.MDPDataset(dataset_d4rl['observations'], dataset_d4rl['actions'], dataset_d4rl['rewards'], dataset_d4rl['terminals'])
         
-    def __len__(self) -> int:
+    def __len__(self):
         return self.dataset.__len__()
 
     def __getitem__(self, idx):
