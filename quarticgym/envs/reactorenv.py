@@ -45,23 +45,25 @@ class ReactorModel:
     
     # Ordinary Differential Equations (ODEs) described in the report i.e. Equations (1), (2), (3)
     def ode(self, x, u):
-    
+
         c = x[0]        # c_A
         T = x[1]        # T
         h = x[2]        # h
         Tc = u[0]       # Tc
         q = u[1]        # q_out
-        
+
         rate = self.k0*c*np.exp(-self.E_divided_by_R / (T + 273.15))  # kmol/m^3/min
 
-        dxdt = [
-            self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8) - rate,  # kmol/m^3/min
+        return [
+            self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8)
+            - rate,  # kmol/m^3/min
             self.q_in * (self.Tf - T) / (np.pi * self.r ** 2 * h + 1e-8)
             - self.dH / (self.rho * self.Cp) * rate
-            + self.U / (np.pi * self.r ** 2 * h * self.rho * self.Cp + + 1e-8) * (Tc - T),  # degree C/min
-            (self.q_in - q) / (np.pi * self.r ** 2)  # m/min
+            + self.U
+            / (np.pi * self.r ** 2 * h * self.rho * self.Cp + +1e-8)
+            * (Tc - T),  # degree C/min
+            (self.q_in - q) / (np.pi * self.r ** 2),  # m/min
         ]
-        return dxdt
     
     
     # integrates one sampling time or time step and returns the next state
@@ -167,19 +169,17 @@ class ReactorEnv(Env):
         """
         if done is None:
             done = False
+        elif done_info is not None:
+            return done, done_info
         else:
-            if done_info is not None:
-                return done, done_info
-            else:
-                raise Exception("When done is given, done_info should also be given.")
+            raise Exception("When done is given, done_info should also be given.")
 
         if done_info is None:
             done_info = {"terminal": False, "timeout": False}
-        else:
-            if done_info["terminal"] or done_info["timeout"]:
-                done = True
-                return done, done_info
-        
+        elif done_info["terminal"] or done_info["timeout"]:
+            done = True
+            return done, done_info
+
         if self.observation_beyond_box(current_observation):
             done_info["terminal"] = True
             done = True
@@ -190,7 +190,7 @@ class ReactorEnv(Env):
             done_info["terminal"] = True
             done_info["timeout"] = True
             done = True
-        
+
         return done, done_info
     # /---- standard ----
 
@@ -284,9 +284,15 @@ class ReactorEnv(Env):
         len_obs = len(steady_observations)
         val_range = val_per_state**len_obs
         initial_states = np.zeros([val_range,len_obs])
-        tmp_o = []
-        for oi in range(len_obs):
-            tmp_o.append(np.linspace(steady_observations[oi] * (1.0-initial_state_deviation_ratio), steady_observations[oi] * (1.0+initial_state_deviation_ratio), num=val_per_state, endpoint=True))
+        tmp_o = [
+            np.linspace(
+                steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
+                steady_observations[oi] * (1.0 + initial_state_deviation_ratio),
+                num=val_per_state,
+                endpoint=True,
+            )
+            for oi in range(len_obs)
+        ]
 
         for i in range(val_range):
             tmp_val_range = i
@@ -465,12 +471,14 @@ class ReactorEnv(Env):
         if normalize is None:
             normalize = self.normalize
         initial_states = self.set_initial_states(initial_states, num_episodes)
-        dataset = {}
-        dataset["observations"] = []
-        dataset["actions"] = []
-        dataset["rewards"] = []
-        dataset["terminals"] = []
-        dataset["timeouts"] = []
+        dataset = {
+            'observations': [],
+            'actions': [],
+            'rewards': [],
+            'terminals': [],
+            'timeouts': [],
+        }
+
         for n_epi in tqdm(range(num_episodes)):
             o = self.reset(initial_state=initial_states[n_epi])
             r = 0.0
@@ -492,7 +500,7 @@ class ReactorEnv(Env):
                 dataset['rewards'].append(r)
                 dataset['terminals'].append(done)
                 dataset["timeouts"].append(timeout)
-                
+
                 o, r, done, info = self.step(a)
                 timeout = info['timeout']
         dataset["observations"] = np.array(dataset["observations"])
