@@ -356,6 +356,7 @@ class ReactorEnv(Env):
                 observations_list[n_algo].append(algo_observes)
                 actions_list[n_algo].append(algo_actions)
                 rewards_list[n_algo].append(algo_rewards)
+                
             # plot observations
             for n_o in range(self.observation_dim):
                 o_name = self.observation_name[n_o]
@@ -364,8 +365,9 @@ class ReactorEnv(Env):
                 plt.figure(0)
                 plt.title(f"{o_name}")
                 for n_algo in range(len(algorithms)):
+                    alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
                     _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name)
+                    plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name, alpha=alpha)
                 plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
                 plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
                 plt.xticks(np.arange(1, self.max_steps + 2, 1))
@@ -383,8 +385,9 @@ class ReactorEnv(Env):
                 plt.figure(0)
                 plt.title(f"{a_name}")
                 for n_algo in range(len(algorithms)):
+                    alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
                     _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name)
+                    plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name, alpha=alpha)
                 plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
                 plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
                 plt.legend()
@@ -398,8 +401,9 @@ class ReactorEnv(Env):
             plt.figure(0)
             plt.title("reward")
             for n_algo in range(len(algorithms)):
+                alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
                 _, algo_name, _ = algorithms[n_algo]
-                plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name)
+                plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name, alpha=alpha)
             plt.xticks(np.arange(1, self.max_steps + 2, 1))
             plt.legend()
             if plot_dir is not None:
@@ -434,7 +438,11 @@ class ReactorEnv(Env):
             result_dict[algo_name + "_reward_mean"] = rewards_mean
             print(f"{algo_name}_reward_std: {rewards_std}")
             result_dict[algo_name + "_reward_std"] = rewards_std
-        json.dump(result_dict, open(os.path.join(plot_dir, 'result.json'), 'w+'))
+        if plot_dir is not None:
+            f_dir = os.path.join(plot_dir, 'result.json')
+        else:
+            f_dir = 'result.json'
+        json.dump(result_dict, open(f_dir, 'w+'))
         return observations_list, actions_list, rewards_list
 
     def sample_initial_state(self):
