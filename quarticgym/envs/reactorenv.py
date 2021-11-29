@@ -156,21 +156,43 @@ class ReactorEnv(Env):
         # /---- standard ----
     
     # ---- standard ----
-    def done_calculator_standard(self, current_observation, step_count, reward, done=None):
+    def done_calculator_standard(self, current_observation, step_count, reward, done=None, done_info=None):
         """
         check whether the current episode is considered finished.
+        returns a boolean value indicated done or not, and a dictionary with information.
+        here in done_calculator_standard, done_info looks like {"terminal": boolean, "timeout": boolean},
+        where "timeout" is true when episode end due to reaching the maximum episode length,
+        "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
+        
         """
-        if done is not None:
-            return done
-        elif self.observation_beyond_box(current_observation):
-            return True
-        elif step_count >= self.max_steps: # same as range(0, max_steps)
-            return True
-        elif reward == self.error_reward:
-            return True
+        if done is None:
+            done = False
         else:
-            return False
-        # /---- standard ----
+            if done_info is not None:
+                return done, done_info
+            else:
+                raise Exception("When done is given, done_info should also be given.")
+
+        if done_info is None:
+            done_info = {"terminal": False, "timeout": False}
+        else:
+            if done_info["terminal"] or done_info["timeout"]:
+                done = True
+                return done, done_info
+        
+        if self.observation_beyond_box(current_observation):
+            done_info["terminal"] = True
+            done = True
+        if reward == self.error_reward:
+            done_info["terminal"] = True
+            done = True
+        if step_count >= self.max_steps: # same as range(0, max_steps)
+            done_info["terminal"] = True
+            done_info["timeout"] = True
+            done = True
+        
+        return done, done_info
+    # /---- standard ----
 
     def reset(self, initial_state=None, normalize=None):
         # ---- standard ----
@@ -210,6 +232,7 @@ class ReactorEnv(Env):
             print("action:", action)
         reward = None
         done = None
+        done_info = {"terminal": False, "timeout": False}
         action = np.array(action, dtype=self.np_dtype)
         normalize = self.normalize if normalize is None else normalize
         if normalize:
@@ -226,6 +249,7 @@ class ReactorEnv(Env):
                 observation = self.previous_observation
                 reward = self.error_reward
                 done = True
+                done_info["terminal"] = True
         # /---- to capture numpy warnings ---- 
 
         # ---- standard ----
@@ -234,7 +258,7 @@ class ReactorEnv(Env):
             reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
         # compute done
         if not done:
-            done = self.done_calculator(observation, self.step_count, reward, done=done)
+            done, done_info = self.done_calculator(observation, self.step_count, reward, done=done, done_info=done_info)
         self.previous_observation = observation
 
         self.total_reward += reward
@@ -249,7 +273,9 @@ class ReactorEnv(Env):
         if normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.step_count += 1
-        return observation, reward, done, {}
+        info = {}
+        info.update(done_info)
+        return observation, reward, done, info
         # /---- standard ----
         
     def evenly_spread_initial_states(self, val_per_state, dump_location=None):
@@ -272,7 +298,17 @@ class ReactorEnv(Env):
             initial_states[i] = curr_val
         if dump_location is not None:
             np.save(dump_location, initial_states)
-        return initial_states    
+        return initial_states
+    
+    # ---- standard ----
+    def set_initial_states(self, initial_states, num_episodes):
+        if initial_states is None:
+            initial_states = [self.sample_initial_state() for _ in range(num_episodes)]
+        elif isinstance(initial_states, str):
+            initial_states = np.load(initial_states)
+        assert len(initial_states) == num_episodes
+        return initial_states
+    # /---- standard ----
 
     def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
         # ---- standard ----
@@ -293,11 +329,7 @@ class ReactorEnv(Env):
         self.error_reward = error_reward
         if plot_dir is not None:
             mkdir_p(plot_dir)
-        if initial_states is None:
-            initial_states = [self.sample_initial_state() for _ in range(num_episodes)]
-        elif isinstance(initial_states, str):
-            initial_states = np.load(initial_states)
-        assert len(initial_states) == num_episodes
+        initial_states = self.set_initial_states(initial_states, num_episodes)
         observations_list = [[] for _ in range(len(algorithms))] # observations_list[i][j][t][k] is algorithm_i_game_j_observation_t_element_k
         actions_list = [[] for _ in range(len(algorithms))] # actions_list[i][j][t][k] is algorithm_i_game_j_action_t_element_k
         rewards_list = [[] for _ in range(len(algorithms))] # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
@@ -419,4 +451,59 @@ class ReactorEnv(Env):
         """
         
         return float( - ( np.mean( (observation - self.steady_observations) ** 2 / np.maximum((self.init_observation - self.steady_observations) ** 2, 1e-8) ) ) )
+    # /---- standard ----
+
+    # ---- standard ----
+    def generate_dataset_with_algorithm(self, algorithm, normalize=None, num_episodes=1, error_reward=-1000.0, initial_states=None, format='d4rl'):
+        """
+        this function aims to create a dataset for offline reinforcement learning, in either d4rl or pytorch format.
+        the trajectories are generated by the algorithm, which interacts with this env initialized by initial_states.
+        algorithm: an instance that has a method predict(observation) -> action: np.ndarray.
+        if format == 'd4rl', returns a dictionary in d4rl format.
+        else if format == 'torch', returns an object of type torch.utils.data.Dataset.
+        """
+        if normalize is None:
+            normalize = self.normalize
+        initial_states = self.set_initial_states(initial_states, num_episodes)
+        dataset = {}
+        dataset["observations"] = []
+        dataset["actions"] = []
+        dataset["rewards"] = []
+        dataset["terminals"] = []
+        dataset["timeouts"] = []
+        for n_epi in tqdm(range(num_episodes)):
+            o = self.reset(initial_state=initial_states[n_epi])
+            r = 0.0
+            done = False
+            timeout = False
+            final_done = False # to still record for the last t when done
+            while not final_done:
+                if done:
+                    final_done = True
+                # tmp_o is to be normalized, if normalize is true.
+                tmp_o = o
+                if normalize:
+                    tmp_o, _, _ = normalize_spaces(tmp_o, self.max_observations, self.min_observations)
+                a = algorithm.predict(tmp_o)
+                if normalize:
+                    a, _, _ = denormalize_spaces(a, self.max_actions, self.min_actions)
+                dataset['observations'].append(o)
+                dataset['actions'].append(a)
+                dataset['rewards'].append(r)
+                dataset['terminals'].append(done)
+                dataset["timeouts"].append(timeout)
+                
+                o, r, done, info = self.step(a)
+                timeout = info['timeout']
+        dataset["observations"] = np.array(dataset["observations"])
+        dataset["actions"] = np.array(dataset["actions"])
+        dataset["rewards"] = np.array(dataset["rewards"])
+        dataset["terminals"] = np.array(dataset["terminals"])
+        dataset["timeouts"] = np.array(dataset["timeouts"])
+        if format == 'd4rl':
+            return dataset
+        elif format == 'torch':
+            return TorchDatasetFromD4RL(dataset)
+        else:
+            raise ValueError(f"format {format} is not supported.")      
     # /---- standard ----
