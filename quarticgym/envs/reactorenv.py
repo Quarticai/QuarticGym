@@ -310,7 +310,7 @@ class ReactorEnv(Env):
         return initial_states
     # /---- standard ----
 
-    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True, plot_dir='./plt_results'):
         # ---- standard ----
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
@@ -318,6 +318,7 @@ class ReactorEnv(Env):
         num_episodes: number of episodes to run
         error_reward: to work with Xiaozhou's evaluation script
         initial_states: None, location of numpy file of initial states or a (numpy) list of initial states
+        to_plt: whether generates plot or not
         plot_dir: None or directory to save plots
         returns: list of average_rewards over each episode and num of episodes
         """
@@ -356,60 +357,61 @@ class ReactorEnv(Env):
                 observations_list[n_algo].append(algo_observes)
                 actions_list[n_algo].append(algo_actions)
                 rewards_list[n_algo].append(algo_rewards)
-                
-            # plot observations
-            for n_o in range(self.observation_dim):
-                o_name = self.observation_name[n_o]
+            
+            if to_plt:    
+                # plot observations
+                for n_o in range(self.observation_dim):
+                    o_name = self.observation_name[n_o]
 
+                    plt.close("all")
+                    plt.figure(0)
+                    plt.title(f"{o_name}")
+                    for n_algo in range(len(algorithms)):
+                        alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
+                        _, algo_name, _ = algorithms[n_algo]
+                        plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name, alpha=alpha)
+                    plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
+                    plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
+                    plt.xticks(np.arange(1, self.max_steps + 2, 1))
+                    plt.legend()
+                    if plot_dir is not None:
+                        path_name = os.path.join(plot_dir, f"{n_epi}_observation_{o_name}.png")
+                        plt.savefig(path_name)
+                    plt.close()
+
+                # plot actions
+                for n_a in range(self.action_dim):
+                    a_name = self.action_name[n_a]
+
+                    plt.close("all")
+                    plt.figure(0)
+                    plt.title(f"{a_name}")
+                    for n_algo in range(len(algorithms)):
+                        alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
+                        _, algo_name, _ = algorithms[n_algo]
+                        plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name, alpha=alpha)
+                    plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
+                    plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
+                    plt.legend()
+                    if plot_dir is not None:
+                        path_name = os.path.join(plot_dir, f"{n_epi}_action_{a_name}.png")
+                        plt.savefig(path_name)
+                    plt.close()
+
+                # plot rewards
                 plt.close("all")
                 plt.figure(0)
-                plt.title(f"{o_name}")
+                plt.title("reward")
                 for n_algo in range(len(algorithms)):
                     alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
                     _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name, alpha=alpha)
-                plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
-                plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
+                    plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name, alpha=alpha)
                 plt.xticks(np.arange(1, self.max_steps + 2, 1))
                 plt.legend()
                 if plot_dir is not None:
-                    path_name = os.path.join(plot_dir, f"{n_epi}_observation_{o_name}.png")
+                    path_name = os.path.join(plot_dir, f"{n_epi}_reward.png")
                     plt.savefig(path_name)
                 plt.close()
-
-            # plot actions
-            for n_a in range(self.action_dim):
-                a_name = self.action_name[n_a]
-
-                plt.close("all")
-                plt.figure(0)
-                plt.title(f"{a_name}")
-                for n_algo in range(len(algorithms)):
-                    alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
-                    _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name, alpha=alpha)
-                plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
-                plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
-                plt.legend()
-                if plot_dir is not None:
-                    path_name = os.path.join(plot_dir, f"{n_epi}_action_{a_name}.png")
-                    plt.savefig(path_name)
-                plt.close()
-
-            # plot rewards
-            plt.close("all")
-            plt.figure(0)
-            plt.title("reward")
-            for n_algo in range(len(algorithms)):
-                alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
-                _, algo_name, _ = algorithms[n_algo]
-                plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name, alpha=alpha)
-            plt.xticks(np.arange(1, self.max_steps + 2, 1))
-            plt.legend()
-            if plot_dir is not None:
-                path_name = os.path.join(plot_dir, f"{n_epi}_reward.png")
-                plt.savefig(path_name)
-            plt.close()
 
         observations_list = np.array(observations_list)
         actions_list = np.array(actions_list)
@@ -417,23 +419,34 @@ class ReactorEnv(Env):
         return observations_list, actions_list, rewards_list
         # /---- standard ----
         
-    def evaluate_rewards_mean_std_over_episodes(self,algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
+    def evaluate_rewards_mean_std_over_episodes(self,algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True, plot_dir='./plt_results', computer_on_episodes=False):
         """
-        returns: mean and std of rewards over all episodes
+        returns: mean and std of rewards over all episodes.
+        since the rewards_list is not aligned (e.g. some trajectories are shorter than the others), so we cannot directly convert it to numpy array.
+        we have to convert and unwrap the nested list.
+        if computer_on_episodes, we first average the rewards_list over episodes, then compute the mean and std.
+        else, we directly compute the mean and std for each step.
         """
         result_dict = {}
-        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes, error_reward=error_reward, initial_states=initial_states, plot_dir=plot_dir)
+        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes, error_reward=error_reward, initial_states=initial_states, to_plt=to_plt, plot_dir=plot_dir)
         for n_algo in range(len(algorithms)):
             _, algo_name, _ = algorithms[n_algo]
             rewards_list_curr_algo = rewards_list[n_algo]
-            rewards_mean_over_episodes = [] # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
-            for n_epi in range(num_episodes):
-                if rewards_list_curr_algo[n_epi][-1] == error_reward:
-                    rewards_mean_over_episodes.append(error_reward)
-                else:
-                    rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
-            rewards_mean = np.mean(rewards_mean_over_episodes)
-            rewards_std = np.std(rewards_mean_over_episodes)
+            if computer_on_episodes:
+                rewards_mean_over_episodes = [] # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
+                for n_epi in range(num_episodes):
+                    if rewards_list_curr_algo[n_epi][-1] == error_reward:
+                        rewards_mean_over_episodes.append(error_reward)
+                    else:
+                        rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
+                rewards_mean = np.mean(rewards_mean_over_episodes)
+                rewards_std = np.std(rewards_mean_over_episodes)
+            else:
+                unwrap_list = []
+                for games_r_list in rewards_list_curr_algo:
+                    unwrap_list += games_r_list
+                rewards_mean = np.mean(unwrap_list)
+                rewards_std = np.std(unwrap_list)
             print(f"{algo_name}_reward_mean: {rewards_mean}")
             result_dict[algo_name + "_reward_mean"] = rewards_mean
             print(f"{algo_name}_reward_std: {rewards_std}")
