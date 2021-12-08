@@ -3,7 +3,9 @@ import numpy as np
 from gym import spaces, Env # to create an openai-gym environment https://gym.openai.com/
 from tqdm import tqdm
 from .utils import *
+from mzutils import SimplePriorityQueue
 import json
+import random
 
 import matplotlib.pyplot as plt
 import os
@@ -419,7 +421,7 @@ class ReactorEnv(Env):
         return observations_list, actions_list, rewards_list
         # /---- standard ----
         
-    def evaluate_rewards_mean_std_over_episodes(self,algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True, plot_dir='./plt_results', computer_on_episodes=False):
+    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True, plot_dir='./plt_results', computer_on_episodes=False):
         """
         returns: mean and std of rewards over all episodes.
         since the rewards_list is not aligned (e.g. some trajectories are shorter than the others), so we cannot directly convert it to numpy array.
@@ -458,6 +460,65 @@ class ReactorEnv(Env):
         json.dump(result_dict, open(f_dir, 'w+'))
         return observations_list, actions_list, rewards_list
 
+    def find_outperformances(self, algorithms, rewards_list, initial_states, threshold=0.05, top_k=10):
+        """
+        this function computes the outperformances of the last algorithm in algorithms.
+        there are three criteria:
+        if in a trajectory, the algorithm has reward >= all other algorithms, the corresponding initial_state is stored to always_better.
+        if in a trajectory, the algorithm's mean reward >= threshold + all other algorithms' mean reward, the corresponding initial_state is stored to averagely_better.
+        for the top_k most outperformed reward mean, the corresponding initial_state is stored to top_k_better, in ascending order.
+        """
+        # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
+        num_episodes = len(rewards_list[0])
+        num_algorithms = len(algorithms)
+        assert num_algorithms == len(rewards_list)
+        assert num_algorithms >= 2
+        always_better = []
+        averagely_better = []
+        top_k_better = SimplePriorityQueue(maxsize=top_k)
+        for n_epi in range(num_episodes):
+            rewards = [rewards_list[n_algo][n_epi] for n_algo in range(num_algorithms)]
+            if self.find_outperformances_compute_always_better(rewards):
+                always_better.append(initial_states[n_epi])
+            average_outperformance = max(self.find_outperformances_compute_average_outperformances(rewards))
+            if average_outperformance >= threshold:
+                averagely_better.append(initial_states[n_epi])
+            # like indicated here, https://stackoverflow.com/questions/42236820/adding-numpy-array-to-a-heap-queue, inserting numpy array to heapq can be risky.
+            try:
+                top_k_better.put((average_outperformance, initial_states[n_epi]))
+            except ValueError:
+                top_k_better.put((average_outperformance+random.uniform(0,1e-8), initial_states[n_epi]))
+        always_better = np.array(always_better)
+        averagely_better = np.array(averagely_better)
+        top_k_better = np.array([a[1] for a in top_k_better.nlargest(top_k)])
+        return always_better, averagely_better, top_k_better
+            
+    def find_outperformances_compute_always_better(self, rewards):
+        num_algorithms = len(rewards)
+        for t in range(len(rewards[-1])):
+            for n_algo in range(num_algorithms - 1):
+                try:
+                    if rewards[-1][t] < rewards[n_algo][t]:
+                        return False
+                except IndexError:
+                    # some algorithm might finishes the trajectory earlier.
+                    pass
+        return True
+                    
+    def find_outperformances_compute_average_outperformances(self, rewards):
+        num_algorithms = len(rewards)
+        average_rewards = []
+        for n_algo in range(num_algorithms):
+            if rewards[n_algo][-1] == self.error_reward:
+                average_rewards.append(self.error_reward)
+            else:
+                average_rewards.append(np.mean(rewards[n_algo]))
+        outperformances = [] # we can hereby use just a scalar, but to reuse the code further for other criteria, we use a list. 
+                             # E.g. in the future we can add a random walk algorithm as our baseline to compare the relative improvement with.
+        for n_algo in range(num_algorithms - 1):
+            outperformances.append( (average_rewards[-1] - average_rewards[n_algo]) / 1.0 )
+        return outperformances
+                
     def sample_initial_state(self):
         init_observation = np.maximum(np.random.uniform(low=(1-self.initial_state_deviation_ratio)*self.steady_observations, high=(1+self.initial_state_deviation_ratio)*self.steady_observations), 0, 
             dtype=self.np_dtype)
