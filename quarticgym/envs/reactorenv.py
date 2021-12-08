@@ -501,7 +501,7 @@ class ReactorEnv(Env):
                     if rewards[-1][t] < rewards[n_algo][t]:
                         return False
                 except IndexError:
-                    # some algorithm might finishes the trajectory earlier.
+                    # some algorithms might finish the trajectory earlier.
                     pass
         return True
                     
