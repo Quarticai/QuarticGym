@@ -3,7 +3,9 @@ import numpy as np
 from gym import spaces, Env # to create an openai-gym environment https://gym.openai.com/
 from tqdm import tqdm
 from .utils import *
+from mzutils import SimplePriorityQueue
 import json
+import random
 
 import matplotlib.pyplot as plt
 import os
@@ -310,7 +312,7 @@ class ReactorEnv(Env):
         return initial_states
     # /---- standard ----
 
-    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True, plot_dir='./plt_results'):
         # ---- standard ----
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
@@ -318,6 +320,7 @@ class ReactorEnv(Env):
         num_episodes: number of episodes to run
         error_reward: to work with Xiaozhou's evaluation script
         initial_states: None, location of numpy file of initial states or a (numpy) list of initial states
+        to_plt: whether generates plot or not
         plot_dir: None or directory to save plots
         returns: list of average_rewards over each episode and num of episodes
         """
@@ -356,56 +359,61 @@ class ReactorEnv(Env):
                 observations_list[n_algo].append(algo_observes)
                 actions_list[n_algo].append(algo_actions)
                 rewards_list[n_algo].append(algo_rewards)
-            # plot observations
-            for n_o in range(self.observation_dim):
-                o_name = self.observation_name[n_o]
+            
+            if to_plt:    
+                # plot observations
+                for n_o in range(self.observation_dim):
+                    o_name = self.observation_name[n_o]
 
+                    plt.close("all")
+                    plt.figure(0)
+                    plt.title(f"{o_name}")
+                    for n_algo in range(len(algorithms)):
+                        alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
+                        _, algo_name, _ = algorithms[n_algo]
+                        plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name, alpha=alpha)
+                    plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
+                    plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
+                    plt.xticks(np.arange(1, self.max_steps + 2, 1))
+                    plt.legend()
+                    if plot_dir is not None:
+                        path_name = os.path.join(plot_dir, f"{n_epi}_observation_{o_name}.png")
+                        plt.savefig(path_name)
+                    plt.close()
+
+                # plot actions
+                for n_a in range(self.action_dim):
+                    a_name = self.action_name[n_a]
+
+                    plt.close("all")
+                    plt.figure(0)
+                    plt.title(f"{a_name}")
+                    for n_algo in range(len(algorithms)):
+                        alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
+                        _, algo_name, _ = algorithms[n_algo]
+                        plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name, alpha=alpha)
+                    plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
+                    plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
+                    plt.legend()
+                    if plot_dir is not None:
+                        path_name = os.path.join(plot_dir, f"{n_epi}_action_{a_name}.png")
+                        plt.savefig(path_name)
+                    plt.close()
+
+                # plot rewards
                 plt.close("all")
                 plt.figure(0)
-                plt.title(f"{o_name}")
+                plt.title("reward")
                 for n_algo in range(len(algorithms)):
+                    alpha = 1 * (0.7 ** (len(algorithms) - 1 - n_algo))
                     _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(np.array(observations_list[n_algo][-1])[:, n_o], label=algo_name)
-                plt.plot([initial_states[n_epi][n_o] for _ in range(self.max_steps)], linestyle="--", label=f"initial_{o_name}")
-                plt.plot([self.steady_observations[n_o] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{o_name}")
+                    plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name, alpha=alpha)
                 plt.xticks(np.arange(1, self.max_steps + 2, 1))
                 plt.legend()
                 if plot_dir is not None:
-                    path_name = os.path.join(plot_dir, f"{n_epi}_observation_{o_name}.png")
+                    path_name = os.path.join(plot_dir, f"{n_epi}_reward.png")
                     plt.savefig(path_name)
                 plt.close()
-
-            # plot actions
-            for n_a in range(self.action_dim):
-                a_name = self.action_name[n_a]
-
-                plt.close("all")
-                plt.figure(0)
-                plt.title(f"{a_name}")
-                for n_algo in range(len(algorithms)):
-                    _, algo_name, _ = algorithms[n_algo]
-                    plt.plot(np.array(actions_list[n_algo][-1])[:, n_a], label=algo_name)
-                plt.plot([self.steady_actions[n_a] for _ in range(self.max_steps)], linestyle="-.", label=f"steady_{a_name}")
-                plt.xticks(np.arange(1, self.max_steps + 2, 1)) 
-                plt.legend()
-                if plot_dir is not None:
-                    path_name = os.path.join(plot_dir, f"{n_epi}_action_{a_name}.png")
-                    plt.savefig(path_name)
-                plt.close()
-
-            # plot rewards
-            plt.close("all")
-            plt.figure(0)
-            plt.title("reward")
-            for n_algo in range(len(algorithms)):
-                _, algo_name, _ = algorithms[n_algo]
-                plt.plot(np.array(rewards_list[n_algo][-1]), label=algo_name)
-            plt.xticks(np.arange(1, self.max_steps + 2, 1))
-            plt.legend()
-            if plot_dir is not None:
-                path_name = os.path.join(plot_dir, f"{n_epi}_reward.png")
-                plt.savefig(path_name)
-            plt.close()
 
         observations_list = np.array(observations_list)
         actions_list = np.array(actions_list)
@@ -413,30 +421,104 @@ class ReactorEnv(Env):
         return observations_list, actions_list, rewards_list
         # /---- standard ----
         
-    def evaluate_rewards_mean_std_over_episodes(self,algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, plot_dir='./plt_results'):
+    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True, plot_dir='./plt_results', computer_on_episodes=False):
         """
-        returns: mean and std of rewards over all episodes
+        returns: mean and std of rewards over all episodes.
+        since the rewards_list is not aligned (e.g. some trajectories are shorter than the others), so we cannot directly convert it to numpy array.
+        we have to convert and unwrap the nested list.
+        if computer_on_episodes, we first average the rewards_list over episodes, then compute the mean and std.
+        else, we directly compute the mean and std for each step.
         """
         result_dict = {}
-        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes, error_reward=error_reward, initial_states=initial_states, plot_dir=plot_dir)
+        observations_list, actions_list, rewards_list = self.evalute_algorithms(algorithms, num_episodes=num_episodes, error_reward=error_reward, initial_states=initial_states, to_plt=to_plt, plot_dir=plot_dir)
         for n_algo in range(len(algorithms)):
             _, algo_name, _ = algorithms[n_algo]
             rewards_list_curr_algo = rewards_list[n_algo]
-            rewards_mean_over_episodes = [] # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
-            for n_epi in range(num_episodes):
-                if rewards_list_curr_algo[n_epi][-1] == error_reward:
-                    rewards_mean_over_episodes.append(error_reward)
-                else:
-                    rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
-            rewards_mean = np.mean(rewards_mean_over_episodes)
-            rewards_std = np.std(rewards_mean_over_episodes)
+            if computer_on_episodes:
+                rewards_mean_over_episodes = [] # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
+                for n_epi in range(num_episodes):
+                    if rewards_list_curr_algo[n_epi][-1] == error_reward:
+                        rewards_mean_over_episodes.append(error_reward)
+                    else:
+                        rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
+                rewards_mean = np.mean(rewards_mean_over_episodes)
+                rewards_std = np.std(rewards_mean_over_episodes)
+            else:
+                unwrap_list = []
+                for games_r_list in rewards_list_curr_algo:
+                    unwrap_list += games_r_list
+                rewards_mean = np.mean(unwrap_list)
+                rewards_std = np.std(unwrap_list)
             print(f"{algo_name}_reward_mean: {rewards_mean}")
             result_dict[algo_name + "_reward_mean"] = rewards_mean
             print(f"{algo_name}_reward_std: {rewards_std}")
             result_dict[algo_name + "_reward_std"] = rewards_std
-        json.dump(result_dict, open(os.path.join(plot_dir, 'result.json'), 'w+'))
+        if plot_dir is not None:
+            f_dir = os.path.join(plot_dir, 'result.json')
+        else:
+            f_dir = 'result.json'
+        json.dump(result_dict, open(f_dir, 'w+'))
         return observations_list, actions_list, rewards_list
 
+    def find_outperformances(self, algorithms, rewards_list, initial_states, threshold=0.05, top_k=10):
+        """
+        this function computes the outperformances of the last algorithm in algorithms.
+        there are three criteria:
+        if in a trajectory, the algorithm has reward >= all other algorithms, the corresponding initial_state is stored to always_better.
+        if in a trajectory, the algorithm's mean reward >= threshold + all other algorithms' mean reward, the corresponding initial_state is stored to averagely_better.
+        for the top_k most outperformed reward mean, the corresponding initial_state is stored to top_k_better, in ascending order.
+        """
+        # rewards_list[i][j][t] is algorithm_i_game_j_reward_t
+        num_episodes = len(rewards_list[0])
+        num_algorithms = len(algorithms)
+        assert num_algorithms == len(rewards_list)
+        assert num_algorithms >= 2
+        always_better = []
+        averagely_better = []
+        top_k_better = SimplePriorityQueue(maxsize=top_k)
+        for n_epi in range(num_episodes):
+            rewards = [rewards_list[n_algo][n_epi] for n_algo in range(num_algorithms)]
+            if self.find_outperformances_compute_always_better(rewards):
+                always_better.append(initial_states[n_epi])
+            average_outperformance = max(self.find_outperformances_compute_average_outperformances(rewards))
+            if average_outperformance >= threshold:
+                averagely_better.append(initial_states[n_epi])
+            # like indicated here, https://stackoverflow.com/questions/42236820/adding-numpy-array-to-a-heap-queue, inserting numpy array to heapq can be risky.
+            try:
+                top_k_better.put((average_outperformance, initial_states[n_epi]))
+            except ValueError:
+                top_k_better.put((average_outperformance+random.uniform(0,1e-8), initial_states[n_epi]))
+        always_better = np.array(always_better)
+        averagely_better = np.array(averagely_better)
+        top_k_better = np.array([a[1] for a in top_k_better.nlargest(top_k)])
+        return always_better, averagely_better, top_k_better
+            
+    def find_outperformances_compute_always_better(self, rewards):
+        num_algorithms = len(rewards)
+        for t in range(len(rewards[-1])):
+            for n_algo in range(num_algorithms - 1):
+                try:
+                    if rewards[-1][t] < rewards[n_algo][t]:
+                        return False
+                except IndexError:
+                    # some algorithms might finish the trajectory earlier.
+                    pass
+        return True
+                    
+    def find_outperformances_compute_average_outperformances(self, rewards):
+        num_algorithms = len(rewards)
+        average_rewards = []
+        for n_algo in range(num_algorithms):
+            if rewards[n_algo][-1] == self.error_reward:
+                average_rewards.append(self.error_reward)
+            else:
+                average_rewards.append(np.mean(rewards[n_algo]))
+        outperformances = [] # we can hereby use just a scalar, but to reuse the code further for other criteria, we use a list. 
+                             # E.g. in the future we can add a random walk algorithm as our baseline to compare the relative improvement with.
+        for n_algo in range(num_algorithms - 1):
+            outperformances.append( (average_rewards[-1] - average_rewards[n_algo]) / 1.0 )
+        return outperformances
+                
     def sample_initial_state(self):
         init_observation = np.maximum(np.random.uniform(low=(1-self.initial_state_deviation_ratio)*self.steady_observations, high=(1+self.initial_state_deviation_ratio)*self.steady_observations), 0, 
             dtype=self.np_dtype)
