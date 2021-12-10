@@ -60,7 +60,7 @@ class ReactorModel:
             self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8) - rate,  # kmol/m^3/min
             self.q_in * (self.Tf - T) / (np.pi * self.r ** 2 * h + 1e-8)
             - self.dH / (self.rho * self.Cp) * rate
-            + self.U / (np.pi * self.r ** 2 * h * self.rho * self.Cp + + 1e-8) * (Tc - T),  # degree C/min
+            + 2 * self.U / (self.r * self.rho * self.Cp) * (Tc - T),  # degree C/min
             (self.q_in - q) / (np.pi * self.r ** 2)  # m/min
         ]
         return dxdt
