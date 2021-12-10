@@ -88,10 +88,16 @@ class BeerFMTEnvGym(Env):
         # biomass -> 0 or dont move means episode end, reward every step -1
         finished = False
         current_biomass = X_A+X_L+X_D
-        if current_biomass < BIOMASS_end_threshold or abs(current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
-            if S < SUGAR_end_threshold:
-                if EtOH > 50.0:
-                    finished = True
+        if (
+            (
+                current_biomass < BIOMASS_end_threshold
+                or abs(current_biomass - self.prev_biomass)
+                < BIOMASS_end_change_threshold
+            )
+            and S < SUGAR_end_threshold
+            and EtOH > 50.0
+        ):
+            finished = True
 
         self.prev_biomass = current_biomass
         return finished

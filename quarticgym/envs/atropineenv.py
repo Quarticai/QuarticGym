@@ -138,20 +138,18 @@ class AtropineEnvGym(Env):
         return observation
 
     def _step(self, action):
-        if self.max_steps == -1:
-            done = False
-        else:
-            done = (self.t >= self.max_steps - 1)
+        done = False if self.max_steps == -1 else (self.t >= self.max_steps - 1)
         action = np.array(action, dtype=np.float32)
         if self.normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
-            
-        if self.reward_on_reject_actions: 
-            if (action > self.max_actions).any() or (action < self.min_actions).any():
-                reward = -100000.0
-                done = True
-                observation = np.zeros(self.observation_dim, dtype=np.float32)
-                return observation, reward, done, {"efactor": 100000.0, "previous_efactor": self.previous_efactor, "reward_on_steady": reward, "reward_on_absolute_efactor": reward, "reward_on_efactor_diff": reward}
+
+        if self.reward_on_reject_actions and (
+            (action > self.max_actions).any() or (action < self.min_actions).any()
+        ):
+            reward = -100000.0
+            done = True
+            observation = np.zeros(self.observation_dim, dtype=np.float32)
+            return observation, reward, done, {"efactor": 100000.0, "previous_efactor": self.previous_efactor, "reward_on_steady": reward, "reward_on_absolute_efactor": reward, "reward_on_efactor_diff": reward}
 
         if self.uss_subtracted:
             uk = [
@@ -174,11 +172,10 @@ class AtropineEnvGym(Env):
             reward = self.yss - efactor # efactor the smaller the better
         elif self.reward_on_steady:
             reward = reward_on_steady
+        elif self.reward_on_absolute_efactor:
+            reward = reward_on_absolute_efactor
         else:
-            if self.reward_on_absolute_efactor:
-                reward = reward_on_absolute_efactor
-            else:
-                reward = reward_on_efactor_diff
+            reward = reward_on_efactor_diff
         reward += np.linalg.norm(action*self.reward_on_actions_penalty, ord=2)
         self.previous_efactor = efactor
         self.xk = xnext
