@@ -1,15 +1,21 @@
-import numpy as np
-import math
-from scipy.integrate import odeint
-import random
-from .utils import *
-from gym import spaces, Env
+# -*- coding: utf-8 -*-
+"""
+BeerFMT simulates the Beer Fermentation process.
+"""
 
+import math
+import random
+
+import numpy as np
+from gym import spaces, Env
+from scipy.integrate import odeint
+
+from .utils import *
 
 random.seed(0)
 MAX_LENGTH = 200
 INIT_SUGAR = 130
-BEER_init = [0, 2, 2, INIT_SUGAR, 0, 0, 0, 0] # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
+BEER_init = [0, 2, 2, INIT_SUGAR, 0, 0, 0, 0]  # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
 BEER_min = [0, 0, 0, 0, 0, 0, 0, 0]
 BEER_max = [15, 15, 15, 150, 150, 10, 10, MAX_LENGTH]
 TEMPERATURE_min = [9.0]
@@ -59,7 +65,7 @@ def beer_ode(points, t, sets):
     return np.array([dXAt, dXLt, dXDt, dSt, dEtOHt, dDYt, dEAt])
 
 
-class BeerFMTEnvGym(Env):
+class BeerFMTEnvGym(QuarticGymEnvBase):
 
     def __init__(self, dense_reward=True, normalize=True, observation_relaxation=1.0, action_dim=1, observation_dim=8):
         """
@@ -70,8 +76,9 @@ class BeerFMTEnvGym(Env):
         self.dense_reward = dense_reward
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.action_space = spaces.Box(low=-1*observation_relaxation, high=1*observation_relaxation, shape=(self.observation_dim,))
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
+        self.observation_space = spaces.Box(low=-1 * observation_relaxation, high=1 * observation_relaxation,
+                                            shape=(self.observation_dim,))
+        self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
         # ---- set by dataset or use predefined as you wish if applicable ----
         self.normalize = normalize
         self.max_observations = np.array(BEER_max, dtype=np.float32)
@@ -79,7 +86,7 @@ class BeerFMTEnvGym(Env):
         self.max_actions = np.array(TEMPERATURE_max, dtype=np.float32)
         self.min_actions = np.array(TEMPERATURE_min, dtype=np.float32)
         # ---- set by dataset or use predefined as you wish if applicable ----
-        self.res_forplot = [] # for plotting purposes
+        self.res_forplot = []  # for plotting purposes
 
     def reaction_finish_calculator(self, X_A, X_L, X_D, S, EtOH, DY, EA):
         # X_A+X_L+X_D < 0.5 means end
@@ -87,8 +94,9 @@ class BeerFMTEnvGym(Env):
         # T range 9-16
         # biomass -> 0 or dont move means episode end, reward every step -1
         finished = False
-        current_biomass = X_A+X_L+X_D
-        if current_biomass < BIOMASS_end_threshold or abs(current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
+        current_biomass = X_A + X_L + X_D
+        if current_biomass < BIOMASS_end_threshold or abs(
+                current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
             if S < SUGAR_end_threshold:
                 if EtOH > 50.0:
                     finished = True
@@ -99,15 +107,16 @@ class BeerFMTEnvGym(Env):
     def reset(self):
         self.time = 0
         self.total_reward = 0
+        self.done = False
         observation = BEER_init
-        self.prev_biomass = observation[0]+observation[1]+observation[2]
+        self.prev_biomass = observation[0] + observation[1] + observation[2]
         observation = np.array(observation, dtype=np.float32)
         self.prev_denormalized_observation = observation
         if self.normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
-        
+
         return observation
-    
+
     def step(self, action):
         action = np.array(action, dtype=np.float32)
         if self.normalize:
@@ -125,14 +134,14 @@ class BeerFMTEnvGym(Env):
         done = (finished or self.time == MAX_LENGTH)
         if finished:
             reward = 200
-        elif done:        # reaches time limit but reaction has not finished
+        elif done:  # reaches time limit but reaction has not finished
             reward = -200
         else:
-            reward = -1   # we want the simulation to end fast
+            reward = -1  # we want the simulation to end fast
         self.total_reward += reward
 
         if self.dense_reward:
-            reward = reward # conventional
+            reward = reward  # conventional
         elif not done:
             reward = 0.0
         else:

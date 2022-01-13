@@ -1,0 +1,3 @@
+[submodule "quarticgym/envs/SIPPY"]
+	path = quarticgym/envs/SIPPY
+	url = git@github.com:Mohan-Zhang-u/SIPPY.git
