@@ -41,14 +41,14 @@ Problem Setup
    'Aeration rate', 'Back pressure', 'Water injection/dilution'` have
    step shapes and randomly search within a range of +/- 10% for each
    point. The figure below illustrates how the 'Sugar feed rate' recipe
-   and its searching spce looks like.
+   and its searching space looks like.
 
    .. image:: imgs/pen2.png
 
 2. You will need to come up with a way to control the process to
    optimize two things simultaneously:
 
-   a. the best batch yield (i.e. maximum yield of all batches)
+   a. the best batch yield (i.e., maximum yield of all batches)
 
    b. the average batch yield (i.e. mean yield of all batches)
 
@@ -60,13 +60,13 @@ Problem Setup
    b. the average batch yield so far
 
 4. You will at least need to perform better than the baseline, which is
-   generated with Bayesian Optimization as its core.
+   generated with Bayesian Optimization (BayesOpt) as its core.
 
    a. best batch yield plot (best so far)
 
    b. average batch yield plot (accumulated)
 
-   c. actual numerical result (1k) as well as the code to generate it
+   c. actual numerical result (1k), as well as the code to generate it,
       can be accessed. Also to record the time it takes to run BayesOpt
       for each batch.
 
@@ -137,7 +137,7 @@ Additional Notes
 Benchmarks
 ----------
 
-*the search spaces here is +/- 10% away from recipe setpoints.*
+*The search space here is +/- 10% away from recipe setpoints.*
 
 https://github.com/microsoft/FLAML
 
@@ -146,7 +146,7 @@ https://github.com/Quarticai/DSResearch/blob/master/blendsearch_tune/flaml_tune.
 
 .. image:: imgs/pen4.png
 
-It doesn't utilise the 10 random batch and the performance looks much
+It doesn't utilise the 10 random batches and the performance looks much
 more stable than Hilo.
 
 More results can be found here
@@ -165,7 +165,7 @@ TuRBO             4027, 9.5% 4090, 11.2% fast
 Openbox           3989, 8.4% 4079, 10.9% fast
 ================= ========== =========== =========
 
-Average across all bayeopt frameworks:
+Average across all BayesOpt frameworks:
 
 7.53% average improvement, 11% max improvement.
 

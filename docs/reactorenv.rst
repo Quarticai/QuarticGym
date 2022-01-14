@@ -19,7 +19,7 @@ Performing a component balance on reactant A, the following ordinary differentia
 
     \frac{dc_A}{dt} =\frac{q_{in}}{\pi r^2h}(c_{Af} - c_A) - k_0 \exp(-\frac{E}{RT})c_A
 
-where :math:`c_A` is the concentration of reactant A in :math:`kmol/m^3`, :math:`t` is the time in :math:`min`, :math:`q_{in}` is the volumetric flowrate of the inlet stream in :math:`m^3/min`, :math:`r` is the radius of the reactor in :math:`m`, :math:`h` is the level of reaction mixture in the reactor in :math:`m`, :math:`c_{Af}` is the concentration of reactant A in the feed stream in :math:`kmol/m^3`, :math:`k_0` is the pre-exponential factor in :math:`min^{-1}`, :math:`E/R` is the ratio of reaction activation energy to the universal gas contant in :math:`K` and :math:`T` is the reaction mixture temperature in :math:`K`.
+where :math:`c_A` is the concentration of reactant A in :math:`kmol/m^3`, :math:`t` is the time in :math:`min`, :math:`q_{in}` is the volumetric flow rate of the inlet stream in :math:`m^3/min`, :math:`r` is the radius of the reactor in :math:`m`, :math:`h` is the level of reaction mixture in the reactor in :math:`m`, :math:`c_{Af}` is the concentration of reactant A in the feed stream in :math:`kmol/m^3`, :math:`k_0` is the pre-exponential factor in :math:`min^{-1}`, :math:`E/R` is the ratio of reaction activation energy to the universal gas constant in :math:`K` and :math:`T` is the reaction mixture temperature in :math:`K`.
 
 Similarly, an energy balance can be conducted to obtain the following energy balance equation
 
@@ -37,18 +37,18 @@ Finally, deriving an overall material balance around the reactor leads to the fo
 
 where :math:`q_{out}` is the volumetric flow rate of the contents out of the reactor in :math:`m^3/min`.
 
-A summary of the parameters values used in this project is presented in Table
+A summary of parameters values used in this project is presented in Table
 
 .. image:: imgs/table_of_param.png
     :width: 400
     :align: center
 
-In the CSTR process model described above, :math:`c_A`, :math:`T` and :math:`h` are the state variables. The controlled variables are :math:`c_A` and :math:`h` while the manipulated variables are :math:`q_{out}` and :math:`T_c`. 
+In the CSTR process model described above, :math:`c_A`, :math:`T`, and :math:`h` are the state variables. The controlled variables are :math:`c_A` and :math:`h` while the manipulated variables are :math:`q_{out}` and :math:`T_c`. 
 
 ReactorEnv module
 -----------------
 
-Following above discription, we provide APIs as below:
+Following the above discription, we provide APIs as below:
 
 .. automodule:: quarticgym.envs.reactorenv
     :members:
