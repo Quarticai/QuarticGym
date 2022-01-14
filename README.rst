@@ -19,7 +19,7 @@ Install
     $ pip install .
 
 .. note::
-    if you want to use the `PenSimPy`_ environment with `QuarticGym`_, you will have to build and install `fastodeint`_ following `this instruction <https://github.com/Quarticai/fastodeint/blob/master/README.md>`_, then install `PenSimPy`_.
+    You will need to build the `PenSimPy`_ environment with `QuarticGym`_ separately. Namely, you will have to build and install `fastodeint`_ following `this instruction <https://github.com/Quarticai/fastodeint/blob/master/README.md>`_, then install `PenSimPy`_.
 
     For Linux users, you can just install `fastodeint`_ and `PenSimPy`_ by executing the following commands:
 
@@ -32,7 +32,7 @@ Install
         $ pip install .
         $ cd ..
         $ git clone --recursive git@github.com:Mohan-Zhang-u/PenSimPy.git
-        $ cd PenSimpy
+        $ cd PenSimPy
         $ pip install .
 
 Example Usage
