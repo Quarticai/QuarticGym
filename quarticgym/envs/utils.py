@@ -119,18 +119,16 @@ class QuarticGymEnvBase(Env):
         """
         if done is None:
             done = False
+        elif done_info is not None:
+            return done, done_info
         else:
-            if done_info is not None:
-                return done, done_info
-            else:
-                raise Exception("When done is given, done_info should also be given.")
+            raise Exception("When done is given, done_info should also be given.")
 
         if done_info is None:
             done_info = {"terminal": False, "timeout": False}
-        else:
-            if done_info["terminal"] or done_info["timeout"]:
-                done = True
-                return done, done_info
+        elif done_info["terminal"] or done_info["timeout"]:
+            done = True
+            return done, done_info
 
         if self.observation_beyond_box(current_observation):
             done_info["terminal"] = True
@@ -347,12 +345,14 @@ class QuarticGymEnvBase(Env):
         if normalize is None:
             normalize = self.normalize
         initial_states = self.set_initial_states(initial_states, num_episodes)
-        dataset = {}
-        dataset["observations"] = []
-        dataset["actions"] = []
-        dataset["rewards"] = []
-        dataset["terminals"] = []
-        dataset["timeouts"] = []
+        dataset = {
+            'observations': [],
+            'actions': [],
+            'rewards': [],
+            'terminals': [],
+            'timeouts': [],
+        }
+
         for n_epi in tqdm(range(num_episodes)):
             o = self.reset(initial_state=initial_states[n_epi])
             r = 0.0

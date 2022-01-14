@@ -89,17 +89,17 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
         self.res_forplot = []  # for plotting purposes
 
     def reaction_finish_calculator(self, X_A, X_L, X_D, S, EtOH, DY, EA):
-        # X_A+X_L+X_D < 0.5 means end
-        # X_A+X_L+X_D -> 0 fast, S needs to go to zero, EtOH > 50, the more the better, reward 1:1:1
-        # T range 9-16
-        # biomass -> 0 or dont move means episode end, reward every step -1
-        finished = False
         current_biomass = X_A + X_L + X_D
-        if current_biomass < BIOMASS_end_threshold or abs(
-                current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
-            if S < SUGAR_end_threshold:
-                if EtOH > 50.0:
-                    finished = True
+        finished = (
+            (
+                current_biomass < BIOMASS_end_threshold
+                or abs(current_biomass - self.prev_biomass)
+                < BIOMASS_end_change_threshold
+            )
+            and S < SUGAR_end_threshold
+            and EtOH > 50.0
+        )
+
 
         self.prev_biomass = current_biomass
         return finished

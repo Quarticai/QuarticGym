@@ -133,7 +133,6 @@ class PeniControlData:
     def load_file_list_to_dict(self, file_list, shuffle=True):
         file_list = file_list.copy()
         random.shuffle(file_list)
-        dataset = {}
         observations = []
         actions = []
         next_observations = []
@@ -148,6 +147,7 @@ class PeniControlData:
             with codecs.open(file_path, 'r', encoding='utf-8') as fp:
                 csv_reader = csv.reader(fp, delimiter=self.delimiter)
                 next(csv_reader)
+                terminal = False
                 # get rid of the first line containing only titles
                 for row in csv_reader:
                     observation = [row[0]] + row[7:-1]
@@ -157,7 +157,6 @@ class PeniControlData:
                     # there are 6 items: Discharge rate,Sugar feed rate,Soil bean feed rate,Aeration rate,Back pressure,Water injection/dilution
                     assert len(action) == self.action_dim
                     reward = row[-1]
-                    terminal = False
                     tmp_observations.append(observation)
                     tmp_actions.append(action)
                     tmp_rewards.append(reward)
@@ -169,7 +168,7 @@ class PeniControlData:
             next_observations += tmp_next_observations
             rewards += tmp_rewards
             terminals += tmp_terminals
-        dataset['observations'] = np.array(observations, dtype=np.float32)
+        dataset = {'observations': np.array(observations, dtype=np.float32)}
         dataset['actions'] = np.array(actions, dtype=np.float32)
         dataset['next_observations'] = np.array(next_observations, dtype=np.float32)
         dataset['rewards'] = np.array(rewards, dtype=np.float32)
