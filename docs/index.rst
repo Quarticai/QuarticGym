@@ -17,6 +17,8 @@ Environments
     pensimenv
 
     beerfmtenv
+
+    mabenv
     
 
 Modules

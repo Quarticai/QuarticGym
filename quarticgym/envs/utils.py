@@ -34,6 +34,7 @@ class QuarticGymEnvBase(Env):
     def __init__(self, dense_reward=True, normalize=True, debug_mode=False, action_dim=2, observation_dim=3,
                  reward_function=None, done_calculator=None, max_observations=[1.0, 1.0],
                  min_observations=[-1.0, -1.0], max_actions=[1.0, 1.0], min_actions=[-1.0, -1.0],
+                 observation_name=None, action_name=None, np_dtype=np.float32, max_steps=None, 
                  error_reward=-100.0):
         """the __init__ of a QuarticGym environment.
 
@@ -49,6 +50,8 @@ class QuarticGymEnvBase(Env):
             min_observations (list, optional): Defaults to [-1.0, -1.0].
             max_actions (list, optional): Defaults to [1.0, 1.0].
             min_actions (list, optional): Defaults to [-1.0, -1.0].
+            np_dtype (type, optional): Defaults to np.float32.
+            max_steps (int, optional): Defaults to None.
             error_reward (float, optional): When an error is encountered during an episode (this typically means something really bad, like tank overflow). Defaults to -100.0.
         """
         # define arguments
@@ -66,6 +69,14 @@ class QuarticGymEnvBase(Env):
         self.min_observations = min_observations
         self.max_actions = max_actions
         self.min_actions = min_actions
+        self.observation_name = observation_name
+        self.action_name = action_name
+        if self.observation_name is None:
+            self.observation_name = [f'o_{i}' for i in range(self.observation_dim)]
+        if self.action_name is None:
+            self.action_name = [f'a_{i}' for i in range(self.action_dim)]
+        self.np_dtype = np_dtype
+        self.max_steps = max_steps
         self.error_reward = error_reward
         if self.reward_function is None:
             self.reward_function = self.reward_function_standard
@@ -144,7 +155,9 @@ class QuarticGymEnvBase(Env):
             done = True
 
         return done, done_info
-
+    
+    def sample_initial_state(self):
+        return self.observation_space.sample()
 
     def reset(self, initial_state=None, normalize=None):
         """
