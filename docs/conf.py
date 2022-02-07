@@ -72,3 +72,4 @@ myst_enable_extensions = [
 ]
 
 myst_dmath_double_inline = True # for double enable new in 0.14.0
+numfig = True

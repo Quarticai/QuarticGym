@@ -42,16 +42,16 @@ class QuarticGymEnvBase(Env):
             dense_reward (bool, optional): Whether returns a dense reward or not. If True, will try to return a reward for each step. If False, will return a reward at the end of the episode. Defaults to True.
             normalize (bool, optional): Whether to normalize the actions taken and observations returned to a certain range. If True, the range $$\in R^n, [-1, 1]^n$$ where n is the dimension of an action/observation. Defaults to True.
             debug_mode (bool, optional): Whether to return or print extra information. Defaults to False.
-            action_dim (int, optional): Dimensionality of an action. Defaults to 2.
-            observation_dim (int, optional): Dimensionality of an observation. Defaults to 3.
+            action_dim (int, optional): TOMODIFY: Dimensionality of an action. Defaults to 2.
+            observation_dim (int, optional): TOMODIFY: Dimensionality of an observation. Defaults to 3.
             reward_function ([type], optional): Provide to replace with your custom reward function. When not given, use environments' default reward function. Defaults to None.
             done_calculator ([type], optional): Provide to replace with your custom "episode end here calculator". When not given, use environments' default done calculator. Defaults to None.
-            max_observations (list, optional): Defaults to [1.0, 1.0].
-            min_observations (list, optional): Defaults to [-1.0, -1.0].
-            max_actions (list, optional): Defaults to [1.0, 1.0].
-            min_actions (list, optional): Defaults to [-1.0, -1.0].
+            max_observations (list, optional): TOMODIFY: Defaults to [1.0, 1.0].
+            min_observations (list, optional): TOMODIFY: Defaults to [-1.0, -1.0].
+            max_actions (list, optional): TOMODIFY: Defaults to [1.0, 1.0].
+            min_actions (list, optional): TOMODIFY: Defaults to [-1.0, -1.0].
             np_dtype (type, optional): Defaults to np.float32.
-            max_steps (int, optional): Defaults to None.
+            max_steps (int, optional): TOMODIFY: Defaults to None.
             error_reward (float, optional): When an error is encountered during an episode (this typically means something really bad, like tank overflow). Defaults to -100.0.
         """
         # define arguments
@@ -97,15 +97,29 @@ class QuarticGymEnvBase(Env):
             self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
 
     def observation_beyond_box(self, observation):
-        """
-        check if the observation is beyond the box, which is what we don't want.
-        """
+        """check if the observation is beyond the box, which is what we don't want.
+
+        Args:
+            observation ([type]): This is denormalized observation, as usual.
+
+        Returns:
+            [bool]: observation is beyond the box or not.
+        """        
         return np.any(observation > self.max_observations) or np.any(observation < self.min_observations) or np.any(
             np.isnan(observation)) or np.any(np.isinf(observation))
 
 
     def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
-        # s, a, r, s, a
+        """the s, a, r, s, a calculation.
+
+        Args:
+            previous_observation ([type]): This is denormalized observation, as usual.
+            current_observation ([type]): This is denormalized observation, as usual.
+
+        Returns:
+            [float]: reward.
+        """
+        # 
         if reward is not None:
             return reward
         elif self.observation_beyond_box(current_observation):
@@ -120,13 +134,17 @@ class QuarticGymEnvBase(Env):
 
 
     def done_calculator_standard(self, current_observation, step_count, reward, done=None, done_info=None):
-        """
-        check whether the current episode is considered finished.
-        returns a boolean value indicated done or not, and a dictionary with information.
-        here in done_calculator_standard, done_info looks like {"terminal": boolean, "timeout": boolean},
-        where "timeout" is true when episode end due to reaching the maximum episode length,
-        "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
-        
+        """check whether the current episode is considered finished.
+            returns a boolean value indicated done or not, and a dictionary with information.
+            here in done_calculator_standard, done_info looks like {"terminal": boolean, "timeout": boolean},
+            where "timeout" is true when episode end due to reaching the maximum episode length,
+            "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
+            
+        Args:
+            current_observation ([type]): This is denormalized observation, as usual.
+
+        Returns:
+            [(float, dict)]: done and done_info.
         """
         if done is None:
             done = False
@@ -200,9 +218,10 @@ class QuarticGymEnvBase(Env):
         if normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
 
-        # TOMODIFY: proceed your environment here and collect the observation.
+        # TOMODIFY: proceed your environment here and collect the observation. The observation should be a numpy array.
         observation = [0.0, 0.0]
 
+        observation = np.array(observation, dtype=self.np_dtype)
         # compute reward
         if not reward:
             reward = self.reward_function(self.previous_observation, action, observation, reward=reward)

@@ -1,6 +1,7 @@
 from .utils import *
 import mpctools as mpc
-from .helpers.mab_helpers import xscale, uscale, UpModelHelper, UtilsHelper
+from scipy import integrate
+from .helpers.mab_helpers import xscale, uscale, UpModelHelper, DownModelHelper, UtilsHelper
 
 
 class MAbUpstreamMPC:
@@ -383,14 +384,6 @@ class MAbUpstreamEnvGym(QuarticGymEnvBase):
         info = {}
         info.update(done_info)
         return observation, reward, done, info
-
-    def set_initial_states(self, initial_states, num_episodes):
-        if initial_states is None:
-            initial_states = [self.sample_initial_state() for _ in range(num_episodes)]
-        elif isinstance(initial_states, str):
-            initial_states = np.load(initial_states)
-        assert len(initial_states) == num_episodes
-        return initial_states
 
     def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True,
                            plot_dir='./plt_results'):

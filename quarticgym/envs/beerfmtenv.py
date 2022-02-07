@@ -12,14 +12,10 @@ from scipy.integrate import odeint
 
 from .utils import *
 
+MAX_STEPS = 200
 random.seed(0)
-MAX_LENGTH = 200
 INIT_SUGAR = 130
 BEER_init = [0, 2, 2, INIT_SUGAR, 0, 0, 0, 0]  # X_A, X_L, X_D, S, EtOH, DY, EA = 0, 2, 2, 130, 0, 0, 0
-BEER_min = [0, 0, 0, 0, 0, 0, 0, 0]
-BEER_max = [15, 15, 15, 150, 150, 10, 10, MAX_LENGTH]
-TEMPERATURE_min = [9.0]
-TEMPERATURE_max = [16.0]
 BIOMASS_end_threshold = 0.5
 BIOMASS_end_change_threshold = 0.01
 SUGAR_end_threshold = 0.5
@@ -66,86 +62,217 @@ def beer_ode(points, t, sets):
 
 
 class BeerFMTEnvGym(QuarticGymEnvBase):
+    def __init__(self, dense_reward=True, normalize=True, debug_mode=False, action_dim=1, observation_dim=8,
+                 reward_function=None, done_calculator=None, max_observations=[15, 15, 15, 150, 150, 10, 10, MAX_STEPS],
+                 min_observations=[0, 0, 0, 0, 0, 0, 0, 0], max_actions=[16.0], min_actions=[9.0],
+                 observation_name=None, action_name=None, np_dtype=np.float32, max_steps=MAX_STEPS, 
+                 error_reward=-float(MAX_STEPS)):
 
-    def __init__(self, dense_reward=True, normalize=True, observation_relaxation=1.0, action_dim=1, observation_dim=8):
         """
         Time is in our observation_space. We make the env time aware.
         The only action/input is temperature.
         The observations are X_A, X_L, X_D, S, EtOH, DY, EA, time
         """
-        self.dense_reward = dense_reward
-        self.action_dim = action_dim
-        self.observation_dim = observation_dim
-        self.observation_space = spaces.Box(low=-1 * observation_relaxation, high=1 * observation_relaxation,
-                                            shape=(self.observation_dim,))
-        self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
-        # ---- set by dataset or use predefined as you wish if applicable ----
-        self.normalize = normalize
-        self.max_observations = np.array(BEER_max, dtype=np.float32)
-        self.min_observations = np.array(BEER_min, dtype=np.float32)
-        self.max_actions = np.array(TEMPERATURE_max, dtype=np.float32)
-        self.min_actions = np.array(TEMPERATURE_min, dtype=np.float32)
-        # ---- set by dataset or use predefined as you wish if applicable ----
-        self.res_forplot = []  # for plotting purposes
-
-    def reaction_finish_calculator(self, X_A, X_L, X_D, S, EtOH, DY, EA):
-        # X_A+X_L+X_D < 0.5 means end
-        # X_A+X_L+X_D -> 0 fast, S needs to go to zero, EtOH > 50, the more the better, reward 1:1:1
-        # T range 9-16
-        # biomass -> 0 or dont move means episode end, reward every step -1
-        finished = False
-        current_biomass = X_A + X_L + X_D
-        if current_biomass < BIOMASS_end_threshold or abs(
-                current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
-            if S < SUGAR_end_threshold:
-                if EtOH > 50.0:
-                    finished = True
-
-        self.prev_biomass = current_biomass
-        return finished
-
-    def reset(self):
-        self.time = 0
+        
+        # define arguments
+        self.step_count = 0
         self.total_reward = 0
         self.done = False
-        observation = BEER_init
-        self.prev_biomass = observation[0] + observation[1] + observation[2]
-        observation = np.array(observation, dtype=np.float32)
-        self.prev_denormalized_observation = observation
-        if self.normalize:
-            observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
+        self.dense_reward = dense_reward
+        self.normalize = normalize  # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
+        self.debug_mode = debug_mode  # to print debug information.
+        self.action_dim = action_dim
+        self.observation_dim = observation_dim
+        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
+        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.max_observations = max_observations
+        self.min_observations = min_observations
+        self.max_actions = max_actions
+        self.min_actions = min_actions
+        self.observation_name = observation_name
+        self.action_name = action_name
+        if self.observation_name is None:
+            self.observation_name = [f'o_{i}' for i in range(self.observation_dim)]
+        if self.action_name is None:
+            self.action_name = [f'a_{i}' for i in range(self.action_dim)]
+        self.np_dtype = np_dtype
+        self.max_steps = max_steps
+        self.error_reward = error_reward
+        if self.reward_function is None:
+            self.reward_function = self.reward_function_standard
+        if self.done_calculator is None:
+            self.done_calculator = self.done_calculator_standard
 
+        # define the state and action spaces
+        self.max_observations = np.array(self.max_observations, dtype=self.np_dtype)
+        self.min_observations = np.array(self.min_observations, dtype=self.np_dtype)
+        self.max_actions = np.array(self.max_actions, dtype=self.np_dtype)
+        self.min_actions = np.array(self.min_actions, dtype=self.np_dtype)
+        if self.normalize:
+            self.observation_space = spaces.Box(low=-1, high=1, shape=(self.observation_dim,))
+            self.action_space = spaces.Box(low=-1, high=1, shape=(self.action_dim,))
+        else:
+            self.observation_space = spaces.Box(low=self.min_observations, high=self.max_observations,
+                                                shape=(self.observation_dim,))
+            self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
+        
+        self.res_forplot = []  # for plotting purposes
+    
+    def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
+        """the s, a, r, s, a calculation.
+
+        Args:
+            previous_observation ([type]): This is denormalized observation, as usual.
+            current_observation ([type]): This is denormalized observation, as usual.
+
+        Returns:
+            [float]: reward.
+        """
+        # 
+        if reward is not None:
+            return reward
+        elif self.observation_beyond_box(current_observation):
+            return self.error_reward
+
+        done, done_info = self.done_calculator(current_observation, self.step_count, reward)
+        early_submission = done_info.get('early_submission', False)
+        if early_submission:
+            reward = -self.error_reward # early submission is rewarded.
+        elif done:  
+            reward = self.error_reward # reaches time limit but reaction has not finished
+        else:
+            reward = -1 # should finish as soon as possible
+        
+        reward = max(self.error_reward, reward)  # reward cannot be smaller than the error_reward
+        if self.debug_mode:
+            print("reward:", reward)
+        return reward
+    
+    def done_calculator_standard(self, current_observation, step_count, reward, update_prev_biomass=False, done=None, done_info=None):
+        """
+        check whether the current episode is considered finished.
+        returns a boolean value indicated done or not, and a dictionary with information.
+        here in done_calculator_standard, done_info looks like {"terminal": boolean, "timeout": boolean},
+        where "timeout" is true when episode end due to reaching the maximum episode length,
+        "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
+
+        """
+        if done is None:
+            done = False
+        else:
+            if done_info is not None:
+                return done, done_info
+            else:
+                raise Exception("When done is given, done_info should also be given.")
+
+        if done_info is None:
+            done_info = {"terminal": False, "timeout": False}
+        else:
+            if done_info["terminal"] or done_info["timeout"]:
+                done = True
+                return done, done_info
+
+        if self.observation_beyond_box(current_observation):
+            done_info["terminal"] = True
+            done = True
+        if reward == self.error_reward:
+            done_info["terminal"] = True
+            done = True
+        if step_count >= self.max_steps:  # same as range(0, max_steps)
+            done_info["terminal"] = True
+            done_info["timeout"] = True
+            done = True
+            
+        X_A, X_L, X_D, S, EtOH, DY, EA, time = current_observation
+        current_biomass = X_A + X_L + X_D
+        if current_biomass < BIOMASS_end_threshold or abs(current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
+            if S < SUGAR_end_threshold:
+                if EtOH > 50.0:
+                    done_info["terminal"] = True # this is still terminal, though should be rewarded.
+                    done_info["early_submission"] = True
+                    done = True
+        if update_prev_biomass:
+            self.prev_biomass = current_biomass
+        return done, done_info
+    
+    def sample_initial_state(self): # 
+        init_X_L = np.random.uniform(2 * 0.9, 2 * 1.1) # around 2
+        init_X_D = np.random.uniform(2 * 0.9, 2 * 1.1) # around 2
+        init_SUGER = np.random.uniform(INIT_SUGAR * 0.9, INIT_SUGAR * 1.1) # around INIT_SUGAR
+        observation = np.array([0, init_X_L, init_X_D, init_SUGER, 0, 0, 0, 0], dtype=self.np_dtype)
         return observation
+    
+    def reset(self, initial_state=None, normalize=None):
+        """
+        required by gym.
+        This function resets the environment and returns an initial observation.
+        """
+        self.step_count = 0
+        self.total_reward = 0
+        self.done = False
 
-    def step(self, action):
-        action = np.array(action, dtype=np.float32)
-        if self.normalize:
+        if initial_state is not None:
+            initial_state = np.array(initial_state, dtype=self.np_dtype)
+            observation = initial_state
+            self.init_observation = initial_state
+        else:
+            observation = self.sample_initial_state()
+            self.init_observation = observation
+        self.previous_observation = observation
+        
+        # TOMODIFY: reset your environment here.
+        self.prev_biomass = observation[0] + observation[1] + observation[2]
+        
+        normalize = self.normalize if normalize is None else normalize
+        if normalize:
+            observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
+        return observation
+    
+    def step(self, action, normalize=None):
+        """
+        required by gym.
+        This function performs one step within the environment and returns the observation, the reward, whether the episode is finished and debug information, if any.
+        """
+        if self.debug_mode:
+            print("action:", action)
+        reward = None
+        done = None
+        done_info = {"terminal": False, "timeout": False}
+        action = np.array(action, dtype=self.np_dtype)
+        normalize = self.normalize if normalize is None else normalize
+        if normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
-        t = np.arange(0 + self.time, 1 + self.time, 0.01)
-        X_A, X_L, X_D, S, EtOH, DY, EA, _ = self.prev_denormalized_observation
+
+        # TOMODIFY: proceed your environment here and collect the observation.
+        t = np.arange(0 + self.step_count, 1 + self.step_count, 0.01)
+        X_A, X_L, X_D, S, EtOH, DY, EA, _ = self.previous_observation
         sol = odeint(beer_ode, (X_A, X_L, X_D, S, EtOH, DY, EA), t, args=([INIT_SUGAR, action[0] + 273.15],))
         self.res_forplot.append(sol[-1, :])
-        self.time += 1
         X_A, X_L, X_D, S, EtOH, DY, EA = sol[-1, :]
-        observation = [X_A, X_L, X_D, S, EtOH, DY, EA, self.time]
-        observation = np.array(observation, dtype=np.float32)
-        self.prev_denormalized_observation = observation
-        finished = self.reaction_finish_calculator(X_A, X_L, X_D, S, EtOH, DY, EA)
-        done = (finished or self.time == MAX_LENGTH)
-        if finished:
-            reward = 200
-        elif done:  # reaches time limit but reaction has not finished
-            reward = -200
-        else:
-            reward = -1  # we want the simulation to end fast
-        self.total_reward += reward
+        observation = [X_A, X_L, X_D, S, EtOH, DY, EA, self.step_count + 1]
 
+        observation = np.array(observation, dtype=self.np_dtype)
+        # compute reward
+        if not reward:
+            reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
+        # compute done
+        if not done:
+            done, done_info = self.done_calculator(observation, self.step_count, reward, update_prev_biomass=True, done=done, done_info=done_info)
+        self.previous_observation = observation
+
+        self.total_reward += reward
         if self.dense_reward:
             reward = reward  # conventional
         elif not done:
             reward = 0.0
         else:
             reward = self.total_reward
-        if self.normalize:
+        # clip observation so that it won't be beyond the box
+        observation = observation.clip(self.min_observations, self.max_observations)
+        if normalize:
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
-        return observation, reward, done, {"res_forplot": np.array(self.res_forplot)}
+        self.step_count += 1
+        info = {"res_forplot": np.array(self.res_forplot)}
+        info.update(done_info)
+        return observation, reward, done, info
+

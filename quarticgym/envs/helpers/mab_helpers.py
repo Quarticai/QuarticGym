@@ -934,6 +934,36 @@ class DownModelHelper():
             self.x_all[i, :] = xk
         return self.x_all
 
+    def run_cap(self, model):
+        for i in range(1, self.num_sim + 1):
+            sol = integrate.solve_ivp(fun=lambda t, y: model(t, y, u=self.u_all[i - 1]),
+                                      t_span=[0, self.delta_t], y0=tuple(self.x_all[i - 1, :]))
+            xk = sol['y'][:, -1]
+            self.x_all[i, :] = xk
+
+            self.current_time = i*self.delta_t
+            # switchConfig = self.controller(self.current_time)
+            switchConfig = self.capacity_controller(np.concatenate((xk,self.u_all[i-1],np.array([i*self.delta_t]))))
+            if switchConfig == True:
+                self.x_all = self.x_all[:i+1,:]  # Truncate the redundant rows
+                return self.x_all
+
+    def time_controller(self, time):
+        if time >= self.period:
+            switchConfig = True
+        else:
+            switchConfig = False
+        return switchConfig
+    
+    def capacity_controller(self, x): # x of shape (2+1950,) TODO: change switchConfig to -1 or 1?
+        capacity = 2708225  # [mg] Here we use the saturation value. In reality, we should use a capacity way less than this value.
+        currentCapacity = (20000*self.delta_t+x[-1])*x[-2]/2*x[-3]
+        if currentCapacity >= capacity:
+            switchConfig = True
+        else:
+            switchConfig = False
+        return switchConfig
+
 
 class UtilsHelper():
     def __init__(self):
