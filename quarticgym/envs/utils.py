@@ -59,12 +59,12 @@ class QuarticGymEnvBase(Env):
         self.total_reward = 0
         self.done = False
         self.dense_reward = dense_reward
-        self.normalize = normalize  # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
-        self.debug_mode = debug_mode  # to print debug information.
+        self.normalize = normalize  
+        self.debug_mode = debug_mode  
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
-        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.reward_function = reward_function  
+        self.done_calculator = done_calculator  
         self.max_observations = max_observations
         self.min_observations = min_observations
         self.max_actions = max_actions
@@ -100,29 +100,41 @@ class QuarticGymEnvBase(Env):
         """check if the observation is beyond the box, which is what we don't want.
 
         Args:
-            observation ([type]): This is denormalized observation, as usual.
+            observation ([np.ndarray]): This is denormalized observation, as usual.
 
         Returns:
             [bool]: observation is beyond the box or not.
         """        
         return np.any(observation > self.max_observations) or np.any(observation < self.min_observations) or np.any(
             np.isnan(observation)) or np.any(np.isinf(observation))
+        
+    def action_beyond_box(self, action):
+        """check if the action is beyond the box, which is what we don't want.
 
+        Args:
+            action ([np.ndarray]): This is denormalized action, as usual.
+
+        Returns:
+            [bool]: action is beyond the box or not.
+        """        
+        return np.any(action > self.max_actions) or np.any(action < self.min_actions) or np.any(
+            np.isnan(action)) or np.any(np.isinf(action))
 
     def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
         """the s, a, r, s, a calculation.
 
         Args:
-            previous_observation ([type]): This is denormalized observation, as usual.
-            current_observation ([type]): This is denormalized observation, as usual.
+            previous_observation ([np.ndarray]): This is denormalized observation, as usual.
+            action ([np.ndarray]): This is denormalized action, as usual.
+            current_observation ([np.ndarray]): This is denormalized observation, as usual.
+            reward ([float]): If reward is provided, directly return the reward.
 
         Returns:
             [float]: reward.
         """
-        # 
         if reward is not None:
             return reward
-        elif self.observation_beyond_box(current_observation):
+        elif self.observation_beyond_box(current_observation) or self.action_beyond_box(action):
             return self.error_reward
 
         # TOMODIFY: insert your own reward function here.
@@ -132,7 +144,6 @@ class QuarticGymEnvBase(Env):
             print("reward:", reward)
         return reward
 
-
     def done_calculator_standard(self, current_observation, step_count, reward, done=None, done_info=None):
         """check whether the current episode is considered finished.
             returns a boolean value indicated done or not, and a dictionary with information.
@@ -141,7 +152,11 @@ class QuarticGymEnvBase(Env):
             "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
             
         Args:
-            current_observation ([type]): This is denormalized observation, as usual.
+            current_observation ([np.ndarray]): This is denormalized observation, as usual.
+            step_count ([int]): step_count.
+            reward ([float]): reward.
+            done ([bool], optional): Defaults to None.
+            done_info ([dict], optional): how the environment is finished. Defaults to None.
 
         Returns:
             [(float, dict)]: done and done_info.
@@ -161,7 +176,10 @@ class QuarticGymEnvBase(Env):
                 done = True
                 return done, done_info
 
-        if self.observation_beyond_box(current_observation):
+        if self.observation_beyond_box(current_observation): 
+            # here we dont have action_beyond_box since action should not be passed in to done_calculator_standard.
+            # however if action is beyond the box in step fucntion, reward_function_standard has already checked it
+            # and the error_reward check below will be triggered.
             done_info["terminal"] = True
             done = True
         if reward == self.error_reward:
@@ -179,8 +197,7 @@ class QuarticGymEnvBase(Env):
 
     def reset(self, initial_state=None, normalize=None):
         """
-        required by gym.
-        This function resets the environment and returns an initial observation.
+        Required by gym, this function resets the environment and returns an initial observation.
         """
         self.step_count = 0
         self.total_reward = 0
@@ -205,8 +222,7 @@ class QuarticGymEnvBase(Env):
 
     def step(self, action, normalize=None):
         """
-        required by gym.
-        This function performs one step within the environment and returns the observation, the reward, whether the episode is finished and debug information, if any.
+        Required by gym, his function performs one step within the environment and returns the observation, the reward, whether the episode is finished and debug information, if any.
         """
         if self.debug_mode:
             print("action:", action)

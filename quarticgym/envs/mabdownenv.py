@@ -31,12 +31,12 @@ class MAbDownstreamEnvGym(QuarticGymEnvBase):
         self.total_reward = 0
         self.done = False
         self.dense_reward = dense_reward
-        self.normalize = normalize  # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
-        self.debug_mode = debug_mode  # to print debug information.
+        self.normalize = normalize  
+        self.debug_mode = debug_mode  
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
-        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.reward_function = reward_function  
+        self.done_calculator = done_calculator  
         self.max_observations = max_observations
         self.min_observations = min_observations
         self.max_actions = max_actions

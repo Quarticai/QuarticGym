@@ -19,6 +19,8 @@ BEER_init = [0, 2, 2, INIT_SUGAR, 0, 0, 0, 0]  # X_A, X_L, X_D, S, EtOH, DY, EA 
 BIOMASS_end_threshold = 0.5
 BIOMASS_end_change_threshold = 0.01
 SUGAR_end_threshold = 0.5
+ZERO_C_IN_K = 273.15
+
 
 
 def beer_ode(points, t, sets):
@@ -79,12 +81,12 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
         self.total_reward = 0
         self.done = False
         self.dense_reward = dense_reward
-        self.normalize = normalize  # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
-        self.debug_mode = debug_mode  # to print debug information.
+        self.normalize = normalize  
+        self.debug_mode = debug_mode  
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
-        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.reward_function = reward_function  
+        self.done_calculator = done_calculator  
         self.max_observations = max_observations
         self.min_observations = min_observations
         self.max_actions = max_actions
@@ -119,25 +121,15 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
         self.res_forplot = []  # for plotting purposes
     
     def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
-        """the s, a, r, s, a calculation.
-
-        Args:
-            previous_observation ([type]): This is denormalized observation, as usual.
-            current_observation ([type]): This is denormalized observation, as usual.
-
-        Returns:
-            [float]: reward.
-        """
-        # 
         if reward is not None:
             return reward
-        elif self.observation_beyond_box(current_observation):
+        elif self.observation_beyond_box(current_observation) or self.action_beyond_box(action):
             return self.error_reward
 
         done, done_info = self.done_calculator(current_observation, self.step_count, reward)
         early_submission = done_info.get('early_submission', False)
         if early_submission:
-            reward = -self.error_reward # early submission is rewarded.
+            reward = -self.error_reward # early submission is rewarded. The end goal in this simulation is to reach the stop condition (finish production) with a certain time limit, the quicker the better.
         elif done:  
             reward = self.error_reward # reaches time limit but reaction has not finished
         else:
@@ -149,14 +141,6 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
         return reward
     
     def done_calculator_standard(self, current_observation, step_count, reward, update_prev_biomass=False, done=None, done_info=None):
-        """
-        check whether the current episode is considered finished.
-        returns a boolean value indicated done or not, and a dictionary with information.
-        here in done_calculator_standard, done_info looks like {"terminal": boolean, "timeout": boolean},
-        where "timeout" is true when episode end due to reaching the maximum episode length,
-        "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
-
-        """
         if done is None:
             done = False
         else:
@@ -244,18 +228,16 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
 
         # TOMODIFY: proceed your environment here and collect the observation.
-        t = np.arange(0 + self.step_count, 1 + self.step_count, 0.01)
+        t = np.arange(0 + self.step_count, 1 + self.step_count, BIOMASS_end_change_threshold)
         X_A, X_L, X_D, S, EtOH, DY, EA, _ = self.previous_observation
-        sol = odeint(beer_ode, (X_A, X_L, X_D, S, EtOH, DY, EA), t, args=([INIT_SUGAR, action[0] + 273.15],))
+        sol = odeint(beer_ode, (X_A, X_L, X_D, S, EtOH, DY, EA), t, args=([INIT_SUGAR, action[0] + ZERO_C_IN_K],))
         self.res_forplot.append(sol[-1, :])
         X_A, X_L, X_D, S, EtOH, DY, EA = sol[-1, :]
         observation = [X_A, X_L, X_D, S, EtOH, DY, EA, self.step_count + 1]
 
         observation = np.array(observation, dtype=self.np_dtype)
-        # compute reward
         if not reward:
             reward = self.reward_function(self.previous_observation, action, observation, reward=reward)
-        # compute done
         if not done:
             done, done_info = self.done_calculator(observation, self.step_count, reward, update_prev_biomass=True, done=done, done_info=done_info)
         self.previous_observation = observation

@@ -99,13 +99,13 @@ class MAbUpstreamEnvGym(QuarticGymEnvBase):
         self.total_reward = 0
         self.done = False
         self.dense_reward = dense_reward
-        # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
+        
         self.normalize = normalize
-        self.debug_mode = debug_mode  # to print debug information.
+        self.debug_mode = debug_mode  
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
-        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.reward_function = reward_function  
+        self.done_calculator = done_calculator  
         self.max_observations = max_observations
         self.min_observations = min_observations
         self.max_actions = max_actions
@@ -164,10 +164,9 @@ class MAbUpstreamEnvGym(QuarticGymEnvBase):
             self.action_space = spaces.Box(low=self.min_actions, high=self.max_actions, shape=(self.action_dim,))
 
     def reward_function_standard(self, previous_observation, action, current_observation, reward=None):
-        # s, a, r, s, a
         if reward is not None:
             return reward
-        elif self.observation_beyond_box(current_observation):
+        elif self.observation_beyond_box(current_observation) or self.action_beyond_box(action):
             return self.error_reward
 
         # TOMODIFY: insert your own reward function here.
@@ -187,14 +186,6 @@ class MAbUpstreamEnvGym(QuarticGymEnvBase):
         return reward
 
     def done_calculator_standard(self, current_observation, step_count, reward, done=None, done_info=None):
-        """
-        check whether the current episode is considered finished.
-        returns a boolean value indicated done or not, and a dictionary with information.
-        here in done_calculator_standard, done_info looks like {"terminal": boolean, "timeout": boolean},
-        where "timeout" is true when episode end due to reaching the maximum episode length,
-        "terminal" is true when "timeout" or episode end due to termination conditions such as env error encountered. (basically done)
-
-        """
         if done is None:
             done = False
         else:
@@ -385,7 +376,7 @@ class MAbUpstreamEnvGym(QuarticGymEnvBase):
         info.update(done_info)
         return observation, reward, done, info
 
-    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True,
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-100.0, initial_states=None, to_plt=True,
                            plot_dir='./plt_results'):
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
@@ -501,7 +492,7 @@ class MAbUpstreamEnvGym(QuarticGymEnvBase):
         return observations_list, actions_list, rewards_list
         # /---- standard ----
 
-    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-1000.0,
+    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-100.0,
                                                 initial_states=None, to_plt=True, plot_dir='./plt_results',
                                                 computer_on_episodes=False):
         """
