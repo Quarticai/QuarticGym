@@ -8,7 +8,7 @@
 
 .. _fastodeint: https://github.com/Quarticai/fastodeint.git
 
-The `QuarticGym`_ supplements several process control environments to the `Openai Gym`_ family, which quenches the pain of performing Deep Reinforcement Learning algorithms on them. Furthermore, we provided `d4rl`_-like wrappers for accompanied datasets, make Offline RL on those environments even smoother.
+The `QuarticGym`_ supplements several process control environments to the `Openai Gym`_ family, which quenches the pain of performing Deep Reinforcement Learning algorithms on them. Furthermore, we provided `d4rl`_-like wrappers for accompanied datasets, making Offline RL on those environments even smoother.
 
 Install
 -------
@@ -19,7 +19,7 @@ Install
     $ pip install .
 
 .. note::
-    You will need to build the `PenSimPy`_ environment with `QuarticGym`_ separately. Namely, you will have to build and install `fastodeint`_ following `this instruction <https://github.com/Quarticai/fastodeint/blob/master/README.md>`_, then install `PenSimPy`_.
+    You need to build the `PenSimPy`_ environment with `QuarticGym`_ separately by building and installing `fastodeint`_ following `the instruction <https://github.com/Quarticai/fastodeint/blob/master/README.md>`_, then install `PenSimPy`_.
 
     For Linux users, you can just install `fastodeint`_ and `PenSimPy`_ by executing the following commands:
 
@@ -38,4 +38,4 @@ Install
 Example Usage
 -------------
 
-You may want to consult this `jupyter notebook <https://github.com/Quarticai/QuarticGym/blob/main/examples.ipynb>`_ to see some example use cases.
+See the `jupyter notebook <https://github.com/Quarticai/QuarticGym/blob/main/examples.ipynb>`_ for example use cases.
