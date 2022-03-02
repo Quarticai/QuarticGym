@@ -37,7 +37,7 @@ def get_observation_data_reformed(observation, t):
 
 class PenSimEnvGym(PenSimEnv, Env):
     def __init__(self, recipe_combo, dense_reward=True, observation_dim=9, action_dim=6, normalize=True,
-                 observation_relaxation=1.2, fast=True):
+                 observation_relaxation=1.2, fast=True, random_seed=0):
         """
         Time is not in our observation_space. We make the env time unaware and MDP.
         :dense_reward : bool, if True we return reward for each step, if False we accumulate the reward and return the sum at the end of an episode
@@ -63,6 +63,7 @@ class PenSimEnvGym(PenSimEnv, Env):
         self.min_observations = -1
         self.max_actions = np.array([4100.0, 151.0, 36.0, 76.0, 1.2, 510.0])
         self.min_actions = np.array([0.0, 7.0, 21.0, 29.0, 0.5, 0.0])
+        self.random_seed_ref = random_seed
         # there are 6 items: Discharge rate,Sugar feed rate,Soil bean feed rate,Aeration rate,Back pressure,Water injection/dilution
         # ---- set by dataset or use predefined as you wish if applicable ----
 
