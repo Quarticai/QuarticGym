@@ -376,6 +376,16 @@ class ReactorEnvGym(QuarticGymEnvBase):
         # /---- standard ----
 
     def evenly_spread_initial_states(self, val_per_state, dump_location=None):
+        """
+        Evenly spread initial states.
+        This function is needed only if the environment has steady_observations. 
+        
+        Args:
+            val_per_state (int): how many values to sampler per state.
+            
+        Returns:
+        [initial_states]: evenly spread initial_states.
+        """
         initial_state_deviation_ratio = self.initial_state_deviation_ratio
         steady_observations = self.steady_observations
         len_obs = len(steady_observations)

@@ -104,7 +104,8 @@ class QuarticGymEnvBase(Env):
 
         Returns:
             [bool]: observation is beyond the box or not.
-        """        
+        """
+        #TODO: check for how long?        
         return np.any(observation > self.max_observations) or np.any(observation < self.min_observations) or np.any(
             np.isnan(observation)) or np.any(np.isinf(observation))
         
@@ -270,6 +271,40 @@ class QuarticGymEnvBase(Env):
             initial_states = np.load(initial_states)
         assert len(initial_states) == num_episodes
         return initial_states
+    
+    def evenly_spread_initial_states(self, val_per_state, dump_location=None):
+        """
+        Evenly spread initial states.
+        This function is needed only if the environment has steady_observations. 
+        
+        Args:
+            val_per_state (int): how many values to sampler per state.
+            
+        Returns:
+        [initial_states]: evenly spread initial_states.
+        """
+        initial_state_deviation_ratio = self.initial_state_deviation_ratio
+        steady_observations = self.steady_observations
+        len_obs = len(steady_observations)
+        val_range = val_per_state ** len_obs
+        initial_states = np.zeros([val_range, len_obs])
+        tmp_o = []
+        for oi in range(len_obs):
+            tmp_o.append(np.linspace(steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
+                                     steady_observations[oi] * (1.0 + initial_state_deviation_ratio), num=val_per_state,
+                                     endpoint=True))
+
+        for i in range(val_range):
+            tmp_val_range = i
+            curr_val = []
+            for oi in range(len_obs):
+                rmder = tmp_val_range % val_per_state
+                curr_val.append(tmp_o[oi][rmder])
+                tmp_val_range = int((tmp_val_range - rmder) / val_per_state)
+            initial_states[i] = curr_val
+        if dump_location is not None:
+            np.save(dump_location, initial_states)
+        return initial_states
 
 
     def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True,
@@ -301,6 +336,10 @@ class QuarticGymEnvBase(Env):
         for n_epi in tqdm(range(num_episodes)):
             for n_algo in range(len(algorithms)):
                 algo, algo_name, normalize = algorithms[n_algo]
+                try:
+                    algo.reset()
+                except AttributeError:
+                    pass
                 algo_observes = []
                 algo_actions = []
                 algo_rewards = []  # list, for this algorithm, reawards of this trajectory.

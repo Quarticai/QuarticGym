@@ -8,7 +8,7 @@
 
 .. _fastodeint: https://github.com/Quarticai/fastodeint.git
 
-The `QuarticGym`_ supplements several process control environments to the `Openai Gym`_ family, which quenches the pain of performing Deep Reinforcement Learning algorithms on them. Furthermore, we provided `d4rl`_-like wrappers for accompanied datasets, make Offline RL on those environments even smoother.
+The `QuarticGym`_ supplements several process control environments to the `Openai Gym`_ family, which quenches the pain of performing Deep Reinforcement Learning algorithms on them. Furthermore, we provided `d4rl`_-like wrappers for accompanied datasets, making Offline RL on those environments even smoother.
 
 Install
 -------
@@ -19,7 +19,7 @@ Install
     $ pip install .
 
 .. note::
-    You will need to build the `PenSimPy`_ environment with `QuarticGym`_ separately. Namely, you will have to build and install `fastodeint`_ following `this instruction <https://github.com/Quarticai/fastodeint/blob/master/README.md>`_, then install `PenSimPy`_.
+    You will need to build the `PenSimPy`_ environment with `QuarticGym`_ separately. Namely, build and install `fastodeint`_ following `this instruction <https://github.com/Quarticai/fastodeint/blob/master/README.md>`_, then install `PenSimPy`_.
 
     For Linux users, you can just install `fastodeint`_ and `PenSimPy`_ by executing the following commands:
 
@@ -35,7 +35,16 @@ Install
         $ cd PenSimPy
         $ pip install .
 
+    If you also want to use the pre-built MPC and EMPC controllers, you would need to install mpctools by CasADi. For Linux users, you can execute the following commands:
+
+    .. code-block::
+
+        $ git clone --recursive git@github.com:Mohan-Zhang-u/mpc-tools-casadi.git
+        $ cd mpc-tools-casadi
+        $ python mpctoolssetup.py install --user
+
+
 Example Usage
 -------------
 
-You may want to consult this `jupyter notebook <https://github.com/Quarticai/QuarticGym/blob/main/examples.ipynb>`_ to see some example use cases.
+See the `jupyter notebook <https://github.com/Quarticai/QuarticGym/blob/main/examples.ipynb>`_ for example use cases.

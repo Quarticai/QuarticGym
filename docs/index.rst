@@ -18,7 +18,7 @@ Environments
 
     beerfmtenv
 
-    .. mabenv
+    mabenv
     
 
 Modules
