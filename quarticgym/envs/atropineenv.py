@@ -561,13 +561,13 @@ class AtropineEnvGym(QuarticGymEnvBase):
         else:
             plt.close()
 
-    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-100000.0, initial_states=None, to_plt=True,
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=None, initial_states=None, to_plt=True,
                            plot_dir='./plt_results'):
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
         algorithms: list of (algorithm, algorithm_name, normalize). algorithm has to have a method predict(observation) -> action: np.ndarray.
         num_episodes: number of episodes to run
-        error_reward: 
+        error_reward: overwrite self.error_reward
         initial_states: None, location of numpy file of initial states or a (numpy) list of initial states
         to_plt: whether generates plot or not
         plot_dir: None or directory to save plots
@@ -578,7 +578,8 @@ class AtropineEnvGym(QuarticGymEnvBase):
         except AssertionError:
             print("env.normalize should be False when executing evalute_algorithms")
             self.normalize = False
-        self.error_reward = error_reward
+        if error_reward is not None:
+            self.error_reward = error_reward
         if plot_dir is not None:
             mkdir_p(plot_dir)
         initial_states = self.set_initial_states(initial_states, num_episodes)
@@ -677,7 +678,7 @@ class AtropineEnvGym(QuarticGymEnvBase):
         return observations_list, actions_list, rewards_list
         # /---- standard ----
 
-    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-100000.0,
+    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=None,
                                                 initial_states=None, to_plt=True, plot_dir='./plt_results',
                                                 computer_on_episodes=False):
         """
@@ -692,14 +693,16 @@ class AtropineEnvGym(QuarticGymEnvBase):
                                                                                 error_reward=error_reward,
                                                                                 initial_states=initial_states,
                                                                                 to_plt=to_plt, plot_dir=plot_dir)
+        from warnings import warn
+        warn('The function evaluate_rewards_mean_std_over_episodes is deprecated. Please use report_rewards.', DeprecationWarning, stacklevel=2)
         for n_algo in range(len(algorithms)):
             _, algo_name, _ = algorithms[n_algo]
             rewards_list_curr_algo = rewards_list[n_algo]
             if computer_on_episodes:
                 rewards_mean_over_episodes = []  # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
                 for n_epi in range(num_episodes):
-                    if rewards_list_curr_algo[n_epi][-1] == error_reward:
-                        rewards_mean_over_episodes.append(error_reward)
+                    if rewards_list_curr_algo[n_epi][-1] == self.error_reward: # if error_reward is provided, self.error_reward is overwritten in self.evalute_algorithms
+                        rewards_mean_over_episodes.append(self.error_reward)
                     else:
                         rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
                 rewards_mean = np.mean(rewards_mean_over_episodes)

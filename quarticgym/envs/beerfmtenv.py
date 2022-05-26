@@ -67,13 +67,13 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
     def __init__(self, dense_reward=True, normalize=True, debug_mode=False, action_dim=1, observation_dim=8,
                  reward_function=None, done_calculator=None, max_observations=[15, 15, 15, 150, 150, 10, 10, MAX_STEPS],
                  min_observations=[0, 0, 0, 0, 0, 0, 0, 0], max_actions=[16.0], min_actions=[9.0],
-                 observation_name=None, action_name=None, np_dtype=np.float32, max_steps=MAX_STEPS, 
+                 observation_name=["X_A", "X_L", "X_D", "S", "EtOH", "DY", "EA", "time"], action_name=["temperature"], np_dtype=np.float32, max_steps=MAX_STEPS, 
                  error_reward=-float(MAX_STEPS)):
 
         """
         Time is in our observation_space. We make the env time aware.
         The only action/input is temperature.
-        The observations are X_A, X_L, X_D, S, EtOH, DY, EA, time
+        The observations are Active Biomass (g/L), Lag Biomass (g/L), Dead Biomass (g/L), Sugar (g/L), Ethanol (g/L), Diacetyl (g/L), Ethyl Acetate (g/L), time (Hours)
         """
         
         # define arguments
