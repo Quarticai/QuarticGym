@@ -175,7 +175,7 @@ class ControllerHelper:
     def run(self, Xm, Um, Xe, Ue, Xs, Us, Xi, Xie, t, u0, cl):
         uk = copy.deepcopy(u0)
         print("part 1")
-        for k in tqdm(range(0, self.num_sim)):
+        for k in tqdm(range(self.num_sim)):
             # Time
             t += [k * self.dt_spl]
 
@@ -185,7 +185,7 @@ class ControllerHelper:
 
             # Advance one sampling time step.
             # Consider this as we obtain the measurements/observations from the plant after one sampling time
-            for i in range(0, self.dt_ratio):
+            for i in range(self.dt_ratio):
                 xk = self._simulation(Xi[k * self.dt_ratio + i], uk)
                 Xi += [copy.deepcopy(xk)]
 
@@ -199,7 +199,7 @@ class ControllerHelper:
         # EMPC
         print("part 2 with empc")
         uk = copy.deepcopy(u0)  # Reinitialize uk to uss
-        for k in tqdm(range(0, self.num_sim)):
+        for k in tqdm(range(self.num_sim)):
             # Time
             # t += [k * dt_spl]
 
@@ -209,7 +209,7 @@ class ControllerHelper:
 
             # Advance one sampling time step.
             # Consider this as we obtain the measurements/observations from the plant after one sampling time
-            for i in range(0, self.dt_ratio):
+            for i in range(self.dt_ratio):
                 xk = self._simulation(Xie[k * self.dt_ratio + i], uk)
                 Xie += [copy.deepcopy(xk)]
 
@@ -234,7 +234,7 @@ class ControllerHelper:
 
     def _control(self, x, u, control, k):
         # Separate x for each controller
-        x_up = x[0:17]  # 17
+        x_up = x[:17]
         x_buffer = x[17:19]  # 2
         x_down = x[19:]  # 1951
         # Upstream controller
@@ -279,23 +279,13 @@ class ControllerHelper:
         p_ss = self.uss[7] / self.uscale[7]  # Steady state of outlet flow rate
         y_ss = self.xss[17] / self.xscale[17]  # Steady state of liquid level
 
-        # Implement P controller
-        p = p_ss + Kc * (y_ss - y)
-        return p
+        return p_ss + Kc * (y_ss - y)
 
     def _switcher(self, x_down): # change when Cout has the danger concentration.
-        if x_down[-14] >= self.xss[18] * 0.01:  # 1% of breakthrough curve
-            switch = 1  # Column is saturated, now switch column
-        else:
-            switch = 0
-        return switch
+        return 1 if x_down[-14] >= self.xss[18] * 0.01 else 0
 
     def _switcher2(self, x_down): # change when full.
-        if x_down[-1] >= self.sat:
-            switch = 1  # Column is saturated, now switch column
-        else:
-            switch = 0
-        return switch
+        return 1 if x_down[-1] >= self.sat else 0
 
 
 # model helper

@@ -171,20 +171,18 @@ class QuarticGymEnvBase(Env):
         """
         if done is None:
             done = False
-        else:
-            if done_info is not None:
-                return done, done_info
-            else:
-                raise Exception("When done is given, done_info should also be given.")
+        elif done_info is None:
+            raise Exception("When done is given, done_info should also be given.")
 
+        else:
+            return done, done_info
         if done_info is None:
             done_info = {"terminal": False, "timeout": False}
             # done_info["terminal"] and done_info["timeout"] can only be flip from False to True, not vice versa.
-        else:
-            if done_info["terminal"] or done_info["timeout"]:
-                done = True
-                return done, done_info
-        
+        elif done_info["terminal"] or done_info["timeout"]:
+            done = True
+            return done, done_info
+
         # check for valid observation
         if self.observation_beyond_box(current_observation): 
             # here we dont have action_beyond_box since action should not be passed in to done_calculator_standard.
@@ -204,7 +202,7 @@ class QuarticGymEnvBase(Env):
             done_info["terminal"] = True
             done_info["timeout"] = True
             done = True
-            
+
         # TOMODIFY: insert your own done calculator here.
 
         return done, done_info
@@ -343,10 +341,10 @@ class QuarticGymEnvBase(Env):
         except Exception as e:
             observation = self.min_observations
             done_info = {"timeout": False, "error_occurred": True, "terminal": True}
-        
+
         observation, reward, done, done_info = self.observation_done_and_reward_calculator(observation, action, normalize=normalize, step_reward=reward, done_info=done_info)
         info = {}
-        info.update(done_info)
+        info |= done_info
         return observation, reward, done, info
 
 
@@ -374,11 +372,15 @@ class QuarticGymEnvBase(Env):
         len_obs = len(steady_observations)
         val_range = val_per_state ** len_obs
         initial_states = np.zeros([val_range, len_obs])
-        tmp_o = []
-        for oi in range(len_obs):
-            tmp_o.append(np.linspace(steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
-                                     steady_observations[oi] * (1.0 + initial_state_deviation_ratio), num=val_per_state,
-                                     endpoint=True))
+        tmp_o = [
+            np.linspace(
+                steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
+                steady_observations[oi] * (1.0 + initial_state_deviation_ratio),
+                num=val_per_state,
+                endpoint=True,
+            )
+            for oi in range(len_obs)
+        ]
 
         for i in range(val_range):
             tmp_val_range = i
@@ -521,10 +523,7 @@ class QuarticGymEnvBase(Env):
         Returns:
             list of algorithm_name.
         """
-        algo_names = []
-        for algo, algo_name, _ in algorithms:
-            algo_names.append(algo_name)
-        return algo_names
+        return [algo_name for algo, algo_name, _ in algorithms]
 
 
     def report_rewards(self, rewards_list, algo_names=None, save_dir=None):
@@ -538,9 +537,7 @@ class QuarticGymEnvBase(Env):
         """
         result_dict = {}
         if algo_names is None:
-            algo_names = []
-            for i in range(len(rewards_list)):
-                algo_names.append(f'algo_{i}')
+            algo_names = [f'algo_{i}' for i in range(len(rewards_list))]
         num_episodes = len(rewards_list[0])
         for n_algo in range(len(algo_names)):
             algo_name = algo_names[n_algo]
@@ -559,13 +556,13 @@ class QuarticGymEnvBase(Env):
             all_reward_mean = np.mean(unwrap_list)
             all_reward_std = np.std(unwrap_list)
             print(f"{algo_name}_on_episodes_reward_mean: {on_episodes_reward_mean}")
-            result_dict[algo_name + "_on_episodes_reward_mean"] = on_episodes_reward_mean
+            result_dict[f"{algo_name}_on_episodes_reward_mean"] = on_episodes_reward_mean
             print(f"{algo_name}_on_episodes_reward_std: {on_episodes_reward_std}")
-            result_dict[algo_name + "_on_episodes_reward_std"] = on_episodes_reward_std
+            result_dict[f"{algo_name}_on_episodes_reward_std"] = on_episodes_reward_std
             print(f"{algo_name}_all_reward_mean: {all_reward_mean}")
-            result_dict[algo_name + "_all_reward_mean"] = all_reward_mean
+            result_dict[f"{algo_name}_all_reward_mean"] = all_reward_mean
             print(f"{algo_name}_all_reward_std: {all_reward_std}")
-            result_dict[algo_name + "_all_reward_std"] = all_reward_std
+            result_dict[f"{algo_name}_all_reward_std"] = all_reward_std
         mkdir_p(save_dir)
         f_dir = os.path.join(save_dir, 'result.json')
         json.dump(result_dict, open(f_dir, 'w+'))
@@ -610,13 +607,15 @@ class QuarticGymEnvBase(Env):
         if normalize is None:
             normalize = self.normalize
         initial_states = self.set_initial_states(initial_states, num_episodes)
-        dataset = {}
-        dataset["observations"] = []
-        dataset["actions"] = []
-        dataset["rewards"] = []
-        dataset["terminals"] = []
-        dataset["timeouts"] = []
-        dataset["predict_time_taken"] = []
+        dataset = {
+            "observations": [],
+            "actions": [],
+            "rewards": [],
+            "terminals": [],
+            "timeouts": [],
+            "predict_time_taken": [],
+        }
+
         for n_epi in tqdm(range(num_episodes)):
             o = self.reset(initial_state=initial_states[n_epi])
             r = 0.0

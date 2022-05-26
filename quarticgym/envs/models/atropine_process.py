@@ -178,9 +178,7 @@ class LLSeparator:
         Qtot = u[0]  # total volumetric flowrate
         c_in = u[1:15]  # inlet concentration of the components from reactor 3
 
-        # Eq. (10)
-        xdot = (Qtot / self.volume) * (c_in - x)  # [mol/L]
-        return xdot
+        return (Qtot / self.volume) * (c_in - x)
 
     @staticmethod
     def get_algebraic(x, z, u, d):
@@ -192,7 +190,7 @@ class LLSeparator:
         x_m = u[15:]  # mass fraction of components in inlet stream
         ci_avg = x
 
-        F_OR = z[0: NUM_COMPONENTS]  # molar flow rate of organic phase. i.e. waste stream   [mol/min]
+        F_OR = z[:NUM_COMPONENTS]
         F_AQ = z[NUM_COMPONENTS: NUM_COMPONENTS * 2]  # molar flow rate of acqueous phase i.e. product stream [mol/min]
         Q_OR = z[NUM_COMPONENTS * 2]  # volumetric flow rate of organic phase [L/min]
         Q_AQ = z[NUM_COMPONENTS * 2 + 1]  # volumetric flow rate of acqueous phase [L/min]
@@ -230,7 +228,7 @@ class Plant:
         # ::: ::: Mixer: 1. has two inlets
         self.mixer1 = Mixer(1, 2)
         # connect S1 & S2 to Mixer 1
-        self.mixer1.input[:] = self.input[0:2]
+        self.mixer1.input[:] = self.input[:2]
 
         # ::: ::: Tubular reactor: 1
         self.reactor1 = TubularReactor(2, V1, ND1)
@@ -266,7 +264,7 @@ class Plant:
         # connect outlet of reactor 3 to inlet of llseparator
         self.llseparator.input = self.reactor3.output
         # connect the outlets of the llseparator to the two outlets of the overall process
-        self.llseparator.output[0:2] = self.output[0:2]
+        self.llseparator.output[0:2] = self.output[:2]
 
         # define sizes of variables
         self.Nx = NUM_COMPONENTS * (ND1 + ND2 + ND3 + 1)  # state variables
@@ -294,7 +292,7 @@ class Plant:
         # z = algebraic states
 
         # component mass flow rate of organic stream
-        F_mass_OR = z[0: NUM_COMPONENTS] * MOLECULAR_WEIGHT
+        F_mass_OR = z[:NUM_COMPONENTS] * MOLECULAR_WEIGHT
         # component mass flow rate of aqueous stream
         F_mass_AQ = z[NUM_COMPONENTS: NUM_COMPONENTS * 2] * MOLECULAR_WEIGHT
 
@@ -348,7 +346,7 @@ class Plant:
         self.mixer1.output.evaluate_component_molar_concentration()
 
         # select the states for reactor 1
-        x_reactor1 = x[0: NUM_COMPONENTS * ND1]
+        x_reactor1 = x[:NUM_COMPONENTS * ND1]
         # reshape the states into a 2D array. casadi reshape function is used for consistency
         x_reactor1 = reshape(x_reactor1, (NUM_COMPONENTS, ND1))
         # inlet dirichlet boundary condition
@@ -457,7 +455,7 @@ class Plant:
         ND3 = self.reactor3.num_discretization_points
 
         # Reactor 1
-        x_reactor1 = x[0: NUM_COMPONENTS * ND1]
+        x_reactor1 = x[:NUM_COMPONENTS * ND1]
         T_reactor1 = 373.15  # [K] Fixed reactor temperature
         q_reactor1 = u[0]
         u_reactor1 = [q_reactor1, T_reactor1]
@@ -486,9 +484,7 @@ class Plant:
         u_llseparator = u[3:]
         xdot_llseparator = self.llseparator.get_derivative(x_llseparator, z_llseparator, u_llseparator, 0)
 
-        xdot = vertcat(xdot_reactor1, xdot_reactor2, xdot_reactor3, xdot_llseparator)
-
-        return xdot
+        return vertcat(xdot_reactor1, xdot_reactor2, xdot_reactor3, xdot_llseparator)
 
     def get_algebraic(self, x, z, u):
         ND1 = self.reactor1.num_discretization_points
@@ -498,8 +494,9 @@ class Plant:
         x_llseparator = x[NUM_COMPONENTS * (ND1 + ND2 + ND3):]
         z_llseparator = z[:]
         u_llseparator = u[3:]
-        res_llseparator = self.llseparator.get_algebraic(x_llseparator, z_llseparator, u_llseparator, 0)
-        return res_llseparator
+        return self.llseparator.get_algebraic(
+            x_llseparator, z_llseparator, u_llseparator, 0
+        )
 
 
 # simulate model for one time step and get next states and output
@@ -532,7 +529,7 @@ def atropine_mpc_controller(x0, N, Nx, Nu, uss, ur, yr, A, B, C, D):
     xk = x0  # fix initial state from state estimator
 
     for k in range(N):
-        Uk = SX.sym('U_' + str(k), Nu)  # create input variable at time step k
+        Uk = SX.sym(f'U_{str(k)}', Nu)
         w.append(Uk)  # store in decision variable list
         lbw.append(- uss * 1000)  # lower bound on inputs at time k
         ubw.append(uss * 1000)  # upper bound on inputs at time k
@@ -550,10 +547,7 @@ def atropine_mpc_controller(x0, N, Nx, Nu, uss, ur, yr, A, B, C, D):
         ubg.append([inf] * Nx)
 
     # Create an NLP solver
-    opts = {}
-    opts["verbose"] = False
-    opts["ipopt.print_level"] = 0
-    opts["print_time"] = 0
+    opts = {"verbose": False, "ipopt.print_level": 0, "print_time": 0}
     prob = {'f': J, 'x': vertcat(*w), 'g': vertcat(*g)}
     solver = nlpsol('solver', 'ipopt', prob, opts)
 
@@ -567,5 +561,5 @@ def atropine_mpc_controller(x0, N, Nx, Nu, uss, ur, yr, A, B, C, D):
     )
     # get solution
     w_opt = sol['x']
-    u_opt = w_opt[0:Nu]
+    u_opt = w_opt[:Nu]
     return u_opt.full().ravel()

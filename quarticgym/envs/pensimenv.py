@@ -106,10 +106,10 @@ class PenSimEnvGym(PenSimEnv, QuarticGymEnvBase):
         
     def sample_initial_state(self, random_seed_ref=None):
         # notice that this function here has to reset the PenSimEnv.
-        if random_seed_ref:
-            self.random_seed_ref = random_seed_ref
-        else:
-            self.random_seed_ref = random.randint(3, self.random_seed_max)
+        self.random_seed_ref = random_seed_ref or random.randint(
+            3, self.random_seed_max
+        )
+
         _, x = super().reset()
         self.x = x
         observation = get_observation_data_reformed(x, 0)
@@ -141,7 +141,7 @@ class PenSimEnvGym(PenSimEnv, QuarticGymEnvBase):
         normalize = self.normalize if normalize is None else normalize
         if normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
-        
+
         try:
             self.step_count += 1 # here we increment at front
             values_dict = self.recipe_combo.get_values_dict_at(self.step_count * STEP_IN_MINUTES)
@@ -160,11 +160,11 @@ class PenSimEnvGym(PenSimEnv, QuarticGymEnvBase):
         except Exception as e:
             observation = self.min_observations
             done_info = {"timeout": False, "error_occurred": True, "terminal": True}
-        
+
         observation, reward, done, done_info = self.observation_done_and_reward_calculator(observation, action, normalize=normalize, step_reward=reward, done_info=done_info)
         self.step_count -= 1 # we already increment at front.
         info = {}
-        info.update(done_info)
+        info |= done_info
         return observation, reward, done, info
 
 
@@ -203,7 +203,6 @@ class PeniControlData:
     def load_file_list_to_dict(self, file_list, shuffle=True):
         file_list = file_list.copy()
         random.shuffle(file_list)
-        dataset = {}
         observations = []
         actions = []
         next_observations = []
@@ -218,6 +217,7 @@ class PeniControlData:
             with codecs.open(file_path, 'r', encoding='utf-8') as fp:
                 csv_reader = csv.reader(fp, delimiter=self.delimiter)
                 next(csv_reader)
+                terminal = False
                 # get rid of the first line containing only titles
                 for row in csv_reader:
                     observation = [row[0]] + row[7:-1]
@@ -227,7 +227,6 @@ class PeniControlData:
                     # there are 6 items: Discharge rate,Sugar feed rate,Soil bean feed rate,Aeration rate,Back pressure,Water injection/dilution
                     assert len(action) == self.action_dim
                     reward = row[-1]
-                    terminal = False
                     tmp_observations.append(observation)
                     tmp_actions.append(action)
                     tmp_rewards.append(reward)
@@ -239,7 +238,7 @@ class PeniControlData:
             next_observations += tmp_next_observations
             rewards += tmp_rewards
             terminals += tmp_terminals
-        dataset['observations'] = np.array(observations, dtype=np.float32)
+        dataset = {'observations': np.array(observations, dtype=np.float32)}
         dataset['actions'] = np.array(actions, dtype=np.float32)
         dataset['next_observations'] = np.array(next_observations, dtype=np.float32)
         dataset['rewards'] = np.array(rewards, dtype=np.float32)

@@ -127,14 +127,13 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
             return self.error_reward
 
         done, done_info = self.done_calculator(current_observation, self.step_count, reward)
-        early_submission = done_info.get('early_submission', False)
-        if early_submission:
+        if early_submission := done_info.get('early_submission', False):
             reward = -self.error_reward # early submission is rewarded. The end goal in this simulation is to reach the stop condition (finish production) with a certain time limit, the quicker the better.
         elif done:  
             reward = self.error_reward # reaches time limit but reaction has not finished
         else:
             reward = -1 # should finish as soon as possible
-        
+
         reward = max(self.error_reward, reward)  # reward cannot be smaller than the error_reward
         if self.debug_mode:
             print("reward:", reward)
@@ -143,18 +142,16 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
     def done_calculator_standard(self, current_observation, step_count, reward, update_prev_biomass=False, done=None, done_info=None):
         if done is None:
             done = False
-        else:
-            if done_info is not None:
-                return done, done_info
-            else:
-                raise Exception("When done is given, done_info should also be given.")
+        elif done_info is None:
+            raise Exception("When done is given, done_info should also be given.")
 
+        else:
+            return done, done_info
         if done_info is None:
             done_info = {"terminal": False, "timeout": False}
-        else:
-            if done_info["terminal"] or done_info["timeout"]:
-                done = True
-                return done, done_info
+        elif done_info["terminal"] or done_info["timeout"]:
+            done = True
+            return done, done_info
 
         if self.observation_beyond_box(current_observation):
             done_info["terminal"] = True
@@ -166,15 +163,21 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
             done_info["terminal"] = True
             done_info["timeout"] = True
             done = True
-            
+
         X_A, X_L, X_D, S, EtOH, DY, EA, time = current_observation
         current_biomass = X_A + X_L + X_D
-        if current_biomass < BIOMASS_end_threshold or abs(current_biomass - self.prev_biomass) < BIOMASS_end_change_threshold:
-            if S < SUGAR_end_threshold:
-                if EtOH > 50.0:
-                    done_info["terminal"] = True # this is still terminal, though should be rewarded.
-                    done_info["early_submission"] = True
-                    done = True
+        if (
+            (
+                current_biomass < BIOMASS_end_threshold
+                or abs(current_biomass - self.prev_biomass)
+                < BIOMASS_end_change_threshold
+            )
+            and S < SUGAR_end_threshold
+            and EtOH > 50.0
+        ):
+            done_info["terminal"] = True # this is still terminal, though should be rewarded.
+            done_info["early_submission"] = True
+            done = True
         if update_prev_biomass:
             self.prev_biomass = current_biomass
         return done, done_info
@@ -183,8 +186,9 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
         init_X_L = np.random.uniform(2 * 0.9, 2 * 1.1) # around 2
         init_X_D = np.random.uniform(2 * 0.9, 2 * 1.1) # around 2
         init_SUGER = np.random.uniform(INIT_SUGAR * 0.9, INIT_SUGAR * 1.1) # around INIT_SUGAR
-        observation = np.array([0, init_X_L, init_X_D, init_SUGER, 0, 0, 0, 0], dtype=self.np_dtype)
-        return observation
+        return np.array(
+            [0, init_X_L, init_X_D, init_SUGER, 0, 0, 0, 0], dtype=self.np_dtype
+        )
     
     def reset(self, initial_state=None, normalize=None):
         """
@@ -255,6 +259,6 @@ class BeerFMTEnvGym(QuarticGymEnvBase):
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.step_count += 1
         info = {"res_forplot": np.array(self.res_forplot)}
-        info.update(done_info)
+        info |= done_info
         return observation, reward, done, info
 

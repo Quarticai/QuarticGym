@@ -358,18 +358,16 @@ class AtropineEnvGym(QuarticGymEnvBase):
         """
         if done is None:
             done = False
-        else:
-            if done_info is not None:
-                return done, done_info
-            else:
-                raise Exception("When done is given, done_info should also be given.")
+        elif done_info is None:
+            raise Exception("When done is given, done_info should also be given.")
 
+        else:
+            return done, done_info
         if done_info is None:
             done_info = {"terminal": False, "timeout": False}
-        else:
-            if done_info["terminal"] or done_info["timeout"]:
-                done = True
-                return done, done_info
+        elif done_info["terminal"] or done_info["timeout"]:
+            done = True
+            return done, done_info
 
         if self.observation_beyond_box(current_observation):
             done_info["terminal"] = True
@@ -398,9 +396,9 @@ class AtropineEnvGym(QuarticGymEnvBase):
         if normalize:
             action, _, _ = denormalize_spaces(action, self.max_actions, self.min_actions)
 
+        uk = action
         # TOMODIFY: proceed your environment here and collect the observation. The observation should be a numpy array.
         if self.uss_subtracted:
-            uk = action
             uk_p_USS = [
                 action[0] + USS[0],
                 action[1] + USS[1],
@@ -408,7 +406,6 @@ class AtropineEnvGym(QuarticGymEnvBase):
                 action[3] + USS[3]
             ]
         else:
-            uk = action
             uk_p_USS = action
         self.U.append(uk_p_USS)
         _, xnext, znext = self.plant.simulate(self.xk, self.zk, uk_p_USS)
@@ -423,11 +420,10 @@ class AtropineEnvGym(QuarticGymEnvBase):
             reward = self.yss - efactor  # efactor the smaller the better
         elif self.reward_on_steady:
             reward = reward_on_steady
+        elif self.reward_on_absolute_efactor:
+            reward = reward_on_absolute_efactor
         else:
-            if self.reward_on_absolute_efactor:
-                reward = reward_on_absolute_efactor
-            else:
-                reward = reward_on_efactor_diff
+            reward = reward_on_efactor_diff
         reward += np.linalg.norm(action * self.reward_on_actions_penalty, ord=2)
         # ---- reward calculation here, to avoid large if statements. ----
         self.previous_efactor = efactor
@@ -488,7 +484,7 @@ class AtropineEnvGym(QuarticGymEnvBase):
             "reward_on_absolute_efactor": reward_on_absolute_efactor,
             "reward_on_efactor_diff": reward_on_efactor_diff
             }
-        info.update(done_info)
+        info |= done_info
         return observation, reward, done, info
 
     def step(self, action, normalize=None):

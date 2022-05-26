@@ -158,8 +158,7 @@ class ReactorMLPReinforceAgent(torch.nn.Module):
         if return_distribution:
             return dist
         else:
-            action = np.clip(dist.sample().numpy().flatten(), [0, 0], [100, 0.2])  # clip actions
-            return action
+            return np.clip(dist.sample().numpy().flatten(), [0, 0], [100, 0.2])
 
 
 class ReactorModel:
@@ -192,14 +191,17 @@ class ReactorModel:
 
         rate = self.k0 * c * np.exp(-self.E_divided_by_R / (T + 273.15))  # kmol/m^3/min
 
-        dxdt = [
-            self.q_in * (self.cAf - c) / (np.pi * self.r ** 2 * h + 1e-8) - rate,  # kmol/m^3/min
-            self.q_in * (self.Tf - T) / (np.pi * self.r ** 2 * h + 1e-8)
+        return [
+            self.q_in * (self.cAf - c) / (np.pi * self.r**2 * h + 1e-8)
+            - rate,  # kmol/m^3/min
+            self.q_in * (self.Tf - T) / (np.pi * self.r**2 * h + 1e-8)
             - self.dH / (self.rho * self.Cp) * rate
-            + 2 * self.U / (self.r * self.rho * self.Cp) * (Tc - T),  # degree C/min
-            (self.q_in - q) / (np.pi * self.r ** 2)  # m/min
+            + 2
+            * self.U
+            / (self.r * self.rho * self.Cp)
+            * (Tc - T),  # degree C/min
+            (self.q_in - q) / (np.pi * self.r**2),  # m/min
         ]
-        return dxdt
 
     # integrates one sampling time or time step and returns the next state
     def step(self, x, u):
@@ -371,7 +373,7 @@ class ReactorEnvGym(QuarticGymEnvBase):
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.step_count += 1
         info = {}
-        info.update(done_info)
+        info |= done_info
         return observation, reward, done, info
         # /---- standard ----
 
@@ -391,11 +393,15 @@ class ReactorEnvGym(QuarticGymEnvBase):
         len_obs = len(steady_observations)
         val_range = val_per_state ** len_obs
         initial_states = np.zeros([val_range, len_obs])
-        tmp_o = []
-        for oi in range(len_obs):
-            tmp_o.append(np.linspace(steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
-                                     steady_observations[oi] * (1.0 + initial_state_deviation_ratio), num=val_per_state,
-                                     endpoint=True))
+        tmp_o = [
+            np.linspace(
+                steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
+                steady_observations[oi] * (1.0 + initial_state_deviation_ratio),
+                num=val_per_state,
+                endpoint=True,
+            )
+            for oi in range(len_obs)
+        ]
 
         for i in range(val_range):
             tmp_val_range = i
@@ -563,9 +569,9 @@ class ReactorEnvGym(QuarticGymEnvBase):
                 rewards_mean = np.mean(unwrap_list)
                 rewards_std = np.std(unwrap_list)
             print(f"{algo_name}_reward_mean: {rewards_mean}")
-            result_dict[algo_name + "_reward_mean"] = rewards_mean
+            result_dict[f"{algo_name}_reward_mean"] = rewards_mean
             print(f"{algo_name}_reward_std: {rewards_std}")
-            result_dict[algo_name + "_reward_std"] = rewards_std
+            result_dict[f"{algo_name}_reward_std"] = rewards_std
         if plot_dir is not None:
             f_dir = os.path.join(plot_dir, 'result.json')
         else:
@@ -626,11 +632,10 @@ class ReactorEnvGym(QuarticGymEnvBase):
                 average_rewards.append(self.error_reward)
             else:
                 average_rewards.append(np.mean(rewards[n_algo]))
-        outperformances = []  # we can hereby use just a scalar, but to reuse the code further for other criteria, we use a list.
-        # E.g. in the future we can add a random walk algorithm as our baseline to compare the relative improvement with.
-        for n_algo in range(num_algorithms - 1):
-            outperformances.append((average_rewards[-1] - average_rewards[n_algo]) / 1.0)
-        return outperformances
+        return [
+            (average_rewards[-1] - average_rewards[n_algo]) / 1.0
+            for n_algo in range(num_algorithms - 1)
+        ]
 
     def sample_initial_state(self):
         init_observation = np.maximum(
@@ -663,12 +668,14 @@ class ReactorEnvGym(QuarticGymEnvBase):
         if normalize is None:
             normalize = self.normalize
         initial_states = self.set_initial_states(initial_states, num_episodes)
-        dataset = {}
-        dataset["observations"] = []
-        dataset["actions"] = []
-        dataset["rewards"] = []
-        dataset["terminals"] = []
-        dataset["timeouts"] = []
+        dataset = {
+            "observations": [],
+            "actions": [],
+            "rewards": [],
+            "terminals": [],
+            "timeouts": [],
+        }
+
         for n_epi in tqdm(range(num_episodes)):
             o = self.reset(initial_state=initial_states[n_epi])
             r = 0.0
