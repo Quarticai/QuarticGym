@@ -30,7 +30,7 @@ class MAbUpstreamMPC:
     def predict(self, o):
         u = np.zeros(self.action_dim)
         x = o
-        x_up = x[0:17]  # 17
+        x_up = x[:17]
         x_buffer = x[17:19]  # 2
         x_down = x[19:]  # 1951
         self.mpc_cont.fixvar("x", 0, x_up)
@@ -63,7 +63,7 @@ class MAbUpstreamEMPC:
     def predict(self, o):
         u = np.zeros(self.action_dim)
         x = o
-        x_up = x[0:17]  # 17
+        x_up = x[:17]
         x_buffer = x[17:19]  # 2
         x_down = x[19:]  # 1951
         self.empc_cont.fixvar("x", 0, x_up)
@@ -219,18 +219,16 @@ class MAbEnvGym(QuarticGymEnvBase):
     def done_calculator_standard(self, current_observation, step_count, reward, done=None, done_info=None):
         if done is None:
             done = False
-        else:
-            if done_info is not None:
-                return done, done_info
-            else:
-                raise Exception("When done is given, done_info should also be given.")
+        elif done_info is None:
+            raise Exception("When done is given, done_info should also be given.")
 
+        else:
+            return done, done_info
         if done_info is None:
             done_info = {"terminal": False, "timeout": False}
-        else:
-            if done_info["terminal"] or done_info["timeout"]:
-                done = True
-                return done, done_info
+        elif done_info["terminal"] or done_info["timeout"]:
+            done = True
+            return done, done_info
 
         if self.observation_beyond_box(current_observation):
             done_info["terminal"] = True
@@ -282,11 +280,15 @@ class MAbEnvGym(QuarticGymEnvBase):
         len_obs = len(steady_observations)
         val_range = val_per_state ** len_obs
         initial_states = np.zeros([val_range, len_obs])
-        tmp_o = []
-        for oi in range(len_obs):
-            tmp_o.append(np.linspace(steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
-                                     steady_observations[oi] * (1.0 + initial_state_deviation_ratio), num=val_per_state,
-                                     endpoint=True))
+        tmp_o = [
+            np.linspace(
+                steady_observations[oi] * (1.0 - initial_state_deviation_ratio),
+                steady_observations[oi] * (1.0 + initial_state_deviation_ratio),
+                num=val_per_state,
+                endpoint=True,
+            )
+            for oi in range(len_obs)
+        ]
 
         for i in range(val_range):
             tmp_val_range = i
@@ -367,11 +369,11 @@ class MAbEnvGym(QuarticGymEnvBase):
         self.t += [self.step_count*self.dt_spl]
 
 
-        # ---- to capture numpy warnings ---- 
+        # ---- to capture numpy warnings ----
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("error")
             try:
-                for i in range(0, self.controller.dt_ratio):
+                for i in range(self.controller.dt_ratio):
                     xk = self._simulation(self.Xi[self.step_count * self.controller.dt_ratio + i], action)
                     self.Xi += [copy.deepcopy(xk)]
                     observation = xk
@@ -404,7 +406,7 @@ class MAbEnvGym(QuarticGymEnvBase):
             observation, _, _ = normalize_spaces(observation, self.max_observations, self.min_observations)
         self.step_count += 1
         info = {}
-        info.update(done_info)
+        info |= done_info
         return observation, reward, done, info
 
     def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=None, initial_states=None, to_plt=True,
@@ -564,9 +566,9 @@ class MAbEnvGym(QuarticGymEnvBase):
                 rewards_mean = np.mean(unwrap_list)
                 rewards_std = np.std(unwrap_list)
             print(f"{algo_name}_reward_mean: {rewards_mean}")
-            result_dict[algo_name + "_reward_mean"] = rewards_mean
+            result_dict[f"{algo_name}_reward_mean"] = rewards_mean
             print(f"{algo_name}_reward_std: {rewards_std}")
-            result_dict[algo_name + "_reward_std"] = rewards_std
+            result_dict[f"{algo_name}_reward_std"] = rewards_std
         if plot_dir is not None:
             f_dir = os.path.join(plot_dir, 'result.json')
         else:
