@@ -15,6 +15,8 @@ from gym import spaces, Env  # to create an openai-gym environment https://gym.o
 from mzutils import SimplePriorityQueue
 from scipy.integrate import solve_ivp  # the ode solver
 from tqdm import tqdm
+import torch
+import mpctools as mpc
 
 from .utils import *
 
@@ -30,6 +32,134 @@ MIN_ACTIONS = [15.0, 0.05]
 STEADY_OBSERVATIONS = [0.8778252, 51.34660837, 0.659]
 STEADY_ACTIONS = [26.85, 0.1]
 ERROR_REWARD = -1000.0
+
+
+class ReactorPID:
+    """a simple proportional controller that utilizes the config of this environment.
+
+    Returns:
+        [type]: action.
+    """
+    def __init__(self, Kis, steady_state=[0.8778252, 0.659], steady_action=[26.85, 0.1], min_action=[15.0, 0.05], max_action=[35.0, 0.2]):
+        self.Kis = Kis
+        self.steady_state = steady_state
+        self.steady_action = steady_action
+        self.len_c = len(steady_action)
+        self.min_action = min_action
+        self.max_action = max_action
+    
+    def predict(self, state):
+        state = [state[0], state[2]]
+        action = []
+        for i in range(self.len_c):
+            a = self.Kis[i] * (state[i] - self.steady_state[i]) + self.steady_action[i]
+            action.append(np.clip(a, self.min_action[i], self.max_action[i]))
+        return np.array(action)
+    
+
+class ReactorMPC:
+    """a simple MPC controller.
+
+    Returns:
+        [type]: action.
+    """
+    def __init__(self, Nt=20, dt=0.1, Q=np.eye(3)*0.1, R=np.eye(2)*0.0, P=np.eye(3)*0.1):
+        self.Nt = Nt    # control and prediction horizons
+        self.dt = dt    # sampling time. Should be the same as the step size in the model
+        self.Q = Q      # weight on the state variables
+        self.R = R      # weight on the input variables
+        self.P = P      # terminal cost weight (optional). set to zero matrix with appropriate dimension
+        self.Nx = 3     # number of state variables
+        self.Nu = 2     # number of input variables
+        self.min_action=[15.0, 0.05]
+        self.max_action=[35.0, 0.2]
+
+        # reactor model
+        from quarticgym.envs.reactorenv import ReactorModel
+        self.model = ReactorModel(dt)
+        
+        self.xs = np.array([0.8778252,51.34660837,0.659])   # steady-state state values 
+        self.us = np.array([26.85,0.1])     # steady state input values
+        self.build_controller()
+        
+    # Define stage cost
+    def lfunc(self, x, u):
+        dx = x[:self.Nx] - self.xs[:self.Nx]
+        du = u[:self.Nu] - self.us[:self.Nu]
+        return mpc.mtimes(dx.T,self.Q,dx) + mpc.mtimes(du.T,self.R,du)
+    
+    # define terminal weight
+    def Pffunc(self, x):
+        dx = x[:self.Nx] - self.xs[:self.Nx]
+        return mpc.mtimes(dx.T,self.P,dx)
+    
+    # build the mpc controller using mpctools
+    def build_controller(self):
+        
+        # stage and terminal cost in casadi symbolic form
+        l = mpc.getCasadiFunc(self.lfunc, [self.Nx,self.Nu], ["x","u"], funcname="l")
+        Pf = mpc.getCasadiFunc(self.Pffunc, [self.Nx], ["x"], funcname="Pf")
+        
+        # Create casadi function/model to be used in the controller
+        ode_casadi = mpc.getCasadiFunc(self.model.ode, [self.Nx, self.Nu], ["x","u"], funcname="odef")
+
+        # Set c to a value greater than one to use collocation
+        contargs = dict(
+                N = {"t":self.Nt, "x":self.Nx, "u":self.Nu, "c":3},
+                verbosity=0,    # set verbosity to a number > 0 for debugging purposes otherwise use 0.
+                l=l,
+                x0=self.xs,
+                Pf=Pf,
+                ub = {"u":self.max_action}, # Change upper bounds 
+                lb = {"u":self.min_action},	# Change lower bounds 
+                guess = {
+                        "x":self.xs[:self.Nx],
+                        "u":self.us[:self.Nu]
+                        },
+                )
+        
+        # create MPC controller
+        self.mpc = mpc.nmpc(f=ode_casadi,Delta=self.dt,**contargs)
+    
+    # solve mpc optimization problem at one time step
+    def predict(self,x):
+        # Update intial condition and solve control problem.
+        self.mpc.fixvar("x",0,x) # Set initial value
+        self.mpc.solve() # solve optimal control problem
+        uopt = np.squeeze(self.mpc.var["u",0]) # take the first optimal input solution
+        
+        # if successful, save solution as initial guess for the next optimization problem
+        if self.mpc.stats["status"] == "Solve_Succeeded":
+            self.mpc.saveguess()
+        
+        # return solution status and optimal input
+        return uopt
+
+
+class ReactorMLPReinforceAgent(torch.nn.Module):
+    """a simple torch-MLP based rl agent,.
+
+    Returns:
+        [type]: Can either return a sampled action or the distribution the action sampled from.
+    """
+    def __init__(self, obs_dim=3, act_dim=2, hidden_size=6, device='cpu'):
+        super(ReactorMLPReinforceAgent, self).__init__()
+        log_std = -0.5 * np.ones(act_dim, dtype=np.float32)
+        self.log_std = torch.nn.Parameter(torch.as_tensor(log_std))
+        self.mu_net = torch.nn.Sequential(torch.nn.Linear(obs_dim, hidden_size),
+                                          torch.nn.ReLU(),
+                                          torch.nn.Linear(hidden_size, act_dim))
+        self.device = device
+        
+    def forward(self, obs, return_distribution=True):
+        mu = self.mu_net(obs)
+        std = torch.maximum(torch.exp(self.log_std), torch.ones_like(self.log_std)*1e-4)
+        dist = torch.distributions.normal.Normal(mu, std)
+        if return_distribution:
+            return dist
+        else:
+            action = np.clip(dist.sample().numpy().flatten(), [0, 0], [100, 0.2])  # clip actions
+            return action
 
 
 class ReactorModel:
@@ -92,12 +222,12 @@ class ReactorEnvGym(QuarticGymEnvBase):
         self.total_reward = 0
         self.done = False
         self.dense_reward = dense_reward
-        self.normalize = normalize  # whether we want to normalize the observation and action to be in between -1 and 1. This is common in most of RL algorithms
-        self.debug_mode = debug_mode  # to print debug information.
+        self.normalize = normalize  
+        self.debug_mode = debug_mode  
         self.action_dim = action_dim
         self.observation_dim = observation_dim
-        self.reward_function = reward_function  # if not satisfied with in-house reward function, you can use your own
-        self.done_calculator = done_calculator  # if not satisfied with in-house finish calculator, you can use your own
+        self.reward_function = reward_function  
+        self.done_calculator = done_calculator  
         self.max_observations = max_observations
         self.min_observations = min_observations
         self.max_actions = max_actions
@@ -142,7 +272,7 @@ class ReactorEnvGym(QuarticGymEnvBase):
         # s, a, r, s, a
         if reward is not None:
             return reward
-        elif self.observation_beyond_box(current_observation):
+        elif self.observation_beyond_box(current_observation) or self.action_beyond_box(action):
             return self.error_reward
         # /---- standard ----
         current_observation_evaluated = self.evaluate_observation(current_observation)
@@ -246,6 +376,16 @@ class ReactorEnvGym(QuarticGymEnvBase):
         # /---- standard ----
 
     def evenly_spread_initial_states(self, val_per_state, dump_location=None):
+        """
+        Evenly spread initial states.
+        This function is needed only if the environment has steady_observations. 
+        
+        Args:
+            val_per_state (int): how many values to sampler per state.
+            
+        Returns:
+        [initial_states]: evenly spread initial_states.
+        """
         initial_state_deviation_ratio = self.initial_state_deviation_ratio
         steady_observations = self.steady_observations
         len_obs = len(steady_observations)
@@ -270,13 +410,13 @@ class ReactorEnvGym(QuarticGymEnvBase):
         return initial_states
 
     # ---- standard ----
-    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=-1000.0, initial_states=None, to_plt=True,
+    def evalute_algorithms(self, algorithms, num_episodes=1, error_reward=None, initial_states=None, to_plt=True,
                            plot_dir='./plt_results'):
         """
         when excecuting evalute_algorithms, the self.normalize should be False.
         algorithms: list of (algorithm, algorithm_name, normalize). algorithm has to have a method predict(observation) -> action: np.ndarray.
         num_episodes: number of episodes to run
-        error_reward: 
+        error_reward: overwrite self.error_reward
         initial_states: None, location of numpy file of initial states or a (numpy) list of initial states
         to_plt: whether generates plot or not
         plot_dir: None or directory to save plots
@@ -287,7 +427,8 @@ class ReactorEnvGym(QuarticGymEnvBase):
         except AssertionError:
             print("env.normalize should be False when executing evalute_algorithms")
             self.normalize = False
-        self.error_reward = error_reward
+        if error_reward is not None:
+            self.error_reward = error_reward
         if plot_dir is not None:
             mkdir_p(plot_dir)
         initial_states = self.set_initial_states(initial_states, num_episodes)
@@ -386,7 +527,7 @@ class ReactorEnvGym(QuarticGymEnvBase):
         return observations_list, actions_list, rewards_list
         # /---- standard ----
 
-    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=-1000.0,
+    def evaluate_rewards_mean_std_over_episodes(self, algorithms, num_episodes=1, error_reward=None,
                                                 initial_states=None, to_plt=True, plot_dir='./plt_results',
                                                 computer_on_episodes=False):
         """
@@ -401,14 +542,16 @@ class ReactorEnvGym(QuarticGymEnvBase):
                                                                                 error_reward=error_reward,
                                                                                 initial_states=initial_states,
                                                                                 to_plt=to_plt, plot_dir=plot_dir)
+        from warnings import warn
+        warn('The function evaluate_rewards_mean_std_over_episodes is deprecated. Please use report_rewards.', DeprecationWarning, stacklevel=2)
         for n_algo in range(len(algorithms)):
             _, algo_name, _ = algorithms[n_algo]
             rewards_list_curr_algo = rewards_list[n_algo]
             if computer_on_episodes:
                 rewards_mean_over_episodes = []  # rewards_mean_over_episodes[n_epi] is mean of rewards of n_epi
                 for n_epi in range(num_episodes):
-                    if rewards_list_curr_algo[n_epi][-1] == error_reward:
-                        rewards_mean_over_episodes.append(error_reward)
+                    if rewards_list_curr_algo[n_epi][-1] == self.error_reward: # if error_reward is provided, self.error_reward is overwritten in self.evalute_algorithms
+                        rewards_mean_over_episodes.append(self.error_reward)
                     else:
                         rewards_mean_over_episodes.append(np.mean(rewards_list_curr_algo[n_epi]))
                 rewards_mean = np.mean(rewards_mean_over_episodes)
